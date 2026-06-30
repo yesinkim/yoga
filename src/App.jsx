@@ -4,7 +4,7 @@ import React, {
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Bounds, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import { MUSCLES, matchMuscle } from "./muscles.js";
+import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
 
@@ -103,30 +103,40 @@ function Scene({ register, onPick, onHover, present }) {
   );
 }
 
-// ── 깊이 슬라이더 → 레이어별 불투명도 ───────────────────────────────────────
-function applyDepth(layers, depth, selectedId) {
+// ── 깊이 슬라이더 + 하이라이트 → 레이어별 불투명도 ───────────────────────────
+// focusIds(Set)가 있으면 그 근육들만 강조하고 나머지 근육은 디밍(역방향/호흡근 모드).
+// 없으면 selectedId 하나만 강조(클릭 단일 선택).
+function applyDepth(layers, depth, selectedId, focusIds) {
   const order = LAYER_ORDER.filter((k) => layers[k]);
   const L = order.length;
   if (L === 0) return;
   const pos = depth * (L - 1);
+  const focusing = focusIds && focusIds.size > 0;
 
   order.forEach((key, i) => {
     const isLast = i === L - 1;
     const reveal = clamp(pos - (i - 1), 0, 1);
     const peel = isLast ? 0 : clamp(pos - i, 0, 1);
-    let op = reveal * (1 - peel);
-    if (key === "surface") op *= 0.55;
+    let base = reveal * (1 - peel);
+    if (key === "surface") base *= 0.55;
 
     layers[key].meshes.forEach((m) => {
-      const sel = key === "muscle" && m.userData.muscleId === selectedId && selectedId;
-      const o = sel ? Math.max(op, 0.92) : op;
-      m.material.opacity = o;
-      m.visible = o > 0.02;
-      m.material.depthWrite = o > 0.6;
+      const id = m.userData.muscleId;
+      let op = base;
+      let hl = false;
+      if (key === "muscle" && focusing) {
+        if (id && focusIds.has(id)) { op = Math.max(base, 0.95); hl = true; } // 강조: 깊이와 무관하게 보이게
+        else { op = base * 0.07; }                                            // 나머지 근육은 거의 투명
+      } else if (key === "muscle" && selectedId && id === selectedId) {
+        op = Math.max(base, 0.92); hl = true;
+      }
+      m.material.opacity = op;
+      m.visible = op > 0.02;
+      m.material.depthWrite = op > 0.6;
       if (m.material.emissive) {
-        if (sel) {
+        if (hl) {
           m.material.emissive.copy(HIGHLIGHT);
-          m.material.emissiveIntensity = 0.55;
+          m.material.emissiveIntensity = 0.6;
         } else {
           m.material.emissive.copy(m.userData.baseEmissive);
           m.material.emissiveIntensity = m.userData.baseEmissive.getHex() ? 1 : 0;
@@ -144,6 +154,7 @@ export default function App() {
   const [ready, setReady] = useState(0);  // 레이어 등록될 때마다 +1
   const [depth, setDepth] = useState(0);  // 0..1
   const [selected, setSelected] = useState(null); // muscle obj | {raw} | null
+  const [focus, setFocus] = useState(null); // { kind, title, sub, ids:Set, list:[muscle] } | null
   const [hovering, setHovering] = useState(false);
 
   const register = useCallback((key, payload) => {
@@ -160,10 +171,28 @@ export default function App() {
     setSelected(m || { raw: obj.name });
   }, []);
 
-  // depth / selected / 레이어 변동 시 머티리얼 갱신
+  // 아사나 클릭 → 그 아사나에 동원되는 근육 전체 하이라이트(역방향)
+  const focusAsana = useCallback((ko, sa) => {
+    const list = musclesForAsana(sa);
+    if (!list.length) return;
+    setFocus({ kind: "asana", title: ko, sub: sa, ids: new Set(list.map((m) => m.id)), list });
+  }, []);
+
+  // 호흡근 모드 토글
+  const toggleBreathing = useCallback(() => {
+    setFocus((f) => {
+      if (f?.kind === "breath") return null;
+      const list = MUSCLES.filter((m) => BREATHING_IDS.includes(m.id))
+        .sort((a, b) => BREATHING_IDS.indexOf(a.id) - BREATHING_IDS.indexOf(b.id));
+      return { kind: "breath", title: "호흡근", sub: "", ids: new Set(BREATHING_IDS), list };
+    });
+    setDepth((d) => (d > 0.5 ? 0.5 : d)); // 뼈까지 내려가 있으면 근육층으로 끌어올림
+  }, []);
+
+  // depth / selected / focus / 레이어 변동 시 머티리얼 갱신
   useEffect(() => {
-    applyDepth(layersRef.current, depth, selected?.id);
-  }, [depth, selected, ready]);
+    applyDepth(layersRef.current, depth, selected?.id, focus?.ids);
+  }, [depth, selected, focus, ready]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
@@ -185,7 +214,25 @@ export default function App() {
         <h1>요가 해부학 레이어 뷰어</h1>
       </div>
 
-      <MuscleSearch muscles={MUSCLES} onSelect={setSelected} />
+      <MuscleSearch muscles={MUSCLES} onSelect={(m) => { setSelected(m); }} />
+
+      {focus && (
+        <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : "")}>
+          <div className="fb-head">
+            <span className="fb-kind">{focus.kind === "breath" ? "호흡근 모드" : "아사나 동원 근육"}</span>
+            <strong>{focus.title}</strong>
+            {focus.sub && <i>{focus.sub}</i>}
+            <span className="fb-count">{focus.list.length}</span>
+            <button className="fb-x" onClick={() => setFocus(null)} aria-label="강조 해제">✕ 해제</button>
+          </div>
+          <div className="fb-muscles">
+            {focus.list.map((m) => (
+              <button key={m.id} className={"fb-chip" + (selected?.id === m.id ? " on" : "")}
+                onClick={() => setSelected(m)}>{m.ko}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!anyLoaded && <EmptyState present={present} />}
 
@@ -207,6 +254,10 @@ export default function App() {
             </button>
           ))}
         </div>
+        <button className={"mode-breath" + (focus?.kind === "breath" ? " active" : "")}
+          onClick={toggleBreathing} title="호흡근만 강조 — 횡격막·늑간근·사각근·복부">
+          🫁 호흡근
+        </button>
       </div>
 
       <footer className="attribution">
@@ -227,10 +278,11 @@ export default function App() {
               <span className="group">{selected.group}</span>
               <div className="sec"><div className="h">기능</div><p>{selected.func}</p></div>
               <div className="sec">
-                <div className="h">관련 아사나</div>
+                <div className="h">관련 아사나 <em className="hint-tap">탭하면 동원 근육 강조</em></div>
                 <div className="asanas">
                   {selected.asanas.map(([ko, sa]) => (
-                    <span className="asana" key={sa}>{ko}<i>{sa}</i></span>
+                    <button className="asana" key={sa} onClick={() => focusAsana(ko, sa)}
+                      title={`${ko}에 동원되는 근육 강조`}>{ko}<i>{sa}</i></button>
                   ))}
                 </div>
               </div>

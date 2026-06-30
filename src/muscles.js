@@ -254,6 +254,22 @@ export const MUSCLES = [
   },
 ];
 
+// 호흡근 모드에서 isolate 할 근육 (1차 호흡근 + 보조 흡기근 + 강제 호기 복부근)
+export const BREATHING_IDS = [
+  "diaphragm",            // 횡격막 (주 호흡근)
+  "intercostals",         // 늑간근
+  "scalene",              // 사각근 (보조 흡기)
+  "sternocleidomastoid",  // 흉쇄유돌근 (보조 흡기)
+  "transversus",          // 복횡근 (강제 호기)
+  "obliques",             // 복사근 (강제 호기)
+  "rectus_abdominis",     // 복직근 (강제 호기)
+];
+
+// 아사나(산스크리트명) → 그 아사나에 동원되는 근육 목록 (역방향 매핑)
+export function musclesForAsana(sanskrit) {
+  return MUSCLES.filter((m) => m.asanas.some(([, sa]) => sa === sanskrit));
+}
+
 // 메시 이름 → 근육 항목. 못 찾으면 null.
 export function matchMuscle(rawName) {
   if (!rawName) return null;
