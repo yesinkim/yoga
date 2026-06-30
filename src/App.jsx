@@ -1,8 +1,8 @@
 import React, {
   Suspense, useCallback, useEffect, useMemo, useRef, useState, memo,
 } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Bounds, useGLTF } from "@react-three/drei";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS } from "./muscles.js";
 
@@ -82,9 +82,35 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
   return <primitive object={cloned.scene} {...handlers} />;
 }
 
-function Scene({ register, onPick, onHover, present }) {
+// 로드된 레이어 전체를 원점에 재중심화 + 카메라를 정면 중앙으로 맞춤
+// (자동 프레이밍이 모델을 화면 위쪽에 잡던 문제 해결)
+function Rig({ children, ready }) {
+  const ref = useRef();
+  const { camera, controls } = useThree();
+  useEffect(() => {
+    const g = ref.current;
+    if (!g) return;
+    g.position.set(0, 0, 0);
+    g.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(g);
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    g.position.set(-center.x, -center.y, -center.z); // bbox 중심 → 원점
+    const fov = (camera.fov * Math.PI) / 180;
+    const dist = (Math.max(size.y, size.x * 1.4) / 2) / Math.tan(fov / 2) * 1.28;
+    camera.position.set(0, 0, dist);
+    camera.near = dist / 100;
+    camera.far = dist * 100;
+    camera.updateProjectionMatrix();
+    if (controls) { controls.target.set(0, 0, 0); controls.update(); }
+  }, [ready, camera, controls]);
+  return <group ref={ref}>{children}</group>;
+}
+
+function Scene({ register, onPick, onHover, present, ready }) {
   return (
-    <Bounds fit clip observe margin={1.15}>
+    <Rig ready={ready}>
       {LAYER_ORDER.map((key) => (
         <Suspense key={key} fallback={null}>
           <LayerBoundary onMissing={() => present(key, false)}>
@@ -99,14 +125,14 @@ function Scene({ register, onPick, onHover, present }) {
           </LayerBoundary>
         </Suspense>
       ))}
-    </Bounds>
+    </Rig>
   );
 }
 
 // ── 깊이 슬라이더 + 하이라이트 → 레이어별 불투명도 ───────────────────────────
 // focusIds(Set)가 있으면 그 근육들만 강조하고 나머지 근육은 디밍(역방향/호흡근 모드).
 // 없으면 selectedId 하나만 강조(클릭 단일 선택).
-function applyDepth(layers, depth, selectedId, focusIds) {
+function applyDepth(layers, depth, selectedId, focusIds, hidden) {
   const order = LAYER_ORDER.filter((k) => layers[k]);
   const L = order.length;
   if (L === 0) return;
@@ -121,6 +147,13 @@ function applyDepth(layers, depth, selectedId, focusIds) {
     if (key === "surface") base *= 0.55;
 
     layers[key].meshes.forEach((m) => {
+      // 개별 벗기기로 숨긴 메시는 깊이와 무관하게 감춤
+      if (hidden && hidden.has(m)) {
+        m.material.opacity = 0;
+        m.visible = false;
+        m.material.depthWrite = false;
+        return;
+      }
       const id = m.userData.muscleId;
       let op = base;
       let hl = false;
@@ -156,6 +189,10 @@ export default function App() {
   const [selected, setSelected] = useState(null); // muscle obj | {raw} | null
   const [focus, setFocus] = useState(null); // { kind, title, sub, ids:Set, list:[muscle] } | null
   const [hovering, setHovering] = useState(false);
+  const [peelMode, setPeelMode] = useState(false);   // 클릭으로 근육 벗기기
+  const peelRef = useRef(false);                      // onPick 안정 콜백용
+  const hiddenRef = useRef(new Set());                // 벗겨진(숨긴) 메시들
+  const [hiddenCount, setHiddenCount] = useState(0);  // 재렌더 + 복원 버튼용
 
   const register = useCallback((key, payload) => {
     layersRef.current[key] = payload;
@@ -166,9 +203,29 @@ export default function App() {
   }, []);
 
   const onPick = useCallback((obj) => {
+    if (peelRef.current) {                 // 벗기기 모드: 클릭한 메시 숨김
+      hiddenRef.current.add(obj);
+      setHiddenCount((c) => c + 1);
+      return;
+    }
     console.log("[picked mesh]", obj.name);
     const m = matchMuscle(obj.name);
     setSelected(m || { raw: obj.name });
+  }, []);
+
+  // 벗기기 모드 토글
+  const togglePeel = useCallback(() => {
+    setPeelMode((p) => {
+      const next = !p;
+      peelRef.current = next;
+      if (next) { setSelected(null); setDepth(0); } // 근육 전체 불투명하게
+      return next;
+    });
+  }, []);
+  // 벗긴 근육 전체 복원
+  const restorePeeled = useCallback(() => {
+    hiddenRef.current.clear();
+    setHiddenCount(0);
   }, []);
 
   // 아사나 클릭 → 그 아사나에 동원되는 근육 전체 하이라이트(역방향)
@@ -189,22 +246,22 @@ export default function App() {
     setDepth((d) => (d > 0.5 ? 0.5 : d)); // 뼈까지 내려가 있으면 근육층으로 끌어올림
   }, []);
 
-  // depth / selected / focus / 레이어 변동 시 머티리얼 갱신
+  // depth / selected / focus / 벗기기 / 레이어 변동 시 머티리얼 갱신
   useEffect(() => {
-    applyDepth(layersRef.current, depth, selected?.id, focus?.ids);
-  }, [depth, selected, focus, ready]);
+    applyDepth(layersRef.current, depth, selected?.id, focus?.ids, hiddenRef.current);
+  }, [depth, selected, focus, hiddenCount, ready]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
 
   return (
-    <div className="wrap" style={{ cursor: hovering ? "pointer" : "default" }}>
-      <Canvas camera={{ position: [0, 1.2, 4], fov: 38, near: 0.01, far: 5000 }} gl={{ alpha: true }}>
+    <div className="wrap" style={{ cursor: hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
+      <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }} gl={{ alpha: true }}>
         <hemisphereLight args={["#cdd9e6", "#1a1f27", 0.85]} />
         <directionalLight position={[4, 7, 6]} intensity={1.15} />
         <directionalLight position={[-5, 3, -6]} intensity={0.5} color="#8fbfe0" />
         <Suspense fallback={null}>
-          <Scene register={register} onPick={onPick} onHover={setHovering} present={markAbsent} />
+          <Scene register={register} onPick={onPick} onHover={setHovering} present={markAbsent} ready={ready} />
         </Suspense>
         <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
       </Canvas>
@@ -258,6 +315,15 @@ export default function App() {
           onClick={toggleBreathing} title="호흡근만 강조 — 횡격막·늑간근·사각근·복부">
           🫁 호흡근
         </button>
+        <button className={"mode-peel" + (peelMode ? " active" : "")}
+          onClick={togglePeel} title="켜고 근육을 클릭하면 벗겨내 아래 근육이 보입니다">
+          🔪 벗기기
+        </button>
+        {hiddenCount > 0 && (
+          <button className="restore" onClick={restorePeeled} title="벗긴 근육 모두 되돌리기">
+            ↺ 복원 {hiddenCount}
+          </button>
+        )}
       </div>
 
       <footer className="attribution">

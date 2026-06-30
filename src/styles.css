@@ -69,11 +69,13 @@ canvas{touch-action:none;}
   padding:2px 6px;border-radius:5px;margin-left:2px;}
 
 /* ── 호흡근 모드 버튼 (좌측 콘솔) ──────────────────────────────────────── */
-.mode-breath{margin:2px 12px 0;font-size:12px;font-weight:600;color:#d6dde2;cursor:pointer;
+.mode-breath,.mode-peel,.restore{margin:2px 12px 0;font-size:12px;font-weight:600;color:#d6dde2;cursor:pointer;
   border:1px solid var(--glass-line);background:rgba(255,255,255,.03);border-radius:11px;padding:9px 6px;
   transition:all .18s ease;}
-.mode-breath:hover{background:rgba(255,255,255,.08);}
+.mode-breath:hover,.mode-peel:hover,.restore:hover{background:rgba(255,255,255,.08);}
 .mode-breath.active{background:var(--jade);border-color:var(--jade);color:#0e1b14;}
+.mode-peel.active{background:var(--muscle);border-color:var(--muscle);color:#fff;}
+.restore{color:#e9dcc1;border-color:rgba(236,227,207,.3);}
 
 /* ── 강조 배너 (아사나 역방향 / 호흡근) ───────────────────────────────── */
 .focus-bar{position:absolute;z-index:8;top:64px;left:50%;transform:translateX(-50%);
@@ -157,7 +159,8 @@ canvas{touch-action:none;}
   .search-trigger{top:auto;right:12px;bottom:170px;}
   .search-panel{right:12px;top:auto;bottom:230px;}
   .attribution{display:none;}
-  .mode-breath{width:100%;margin:0;}
+  .mode-breath,.mode-peel,.restore{width:100%;margin:0;}
+  .chips{flex-wrap:wrap;}
   .focus-bar{top:58px;width:calc(100vw - 24px);max-height:34vh;overflow:auto;}
   .card{bottom:200px;max-height:38vh;}
 }
