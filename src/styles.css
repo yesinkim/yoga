@@ -27,8 +27,8 @@ canvas{touch-action:none;}
   text-transform:uppercase;color:#9fb0bb;}
 .depthwrap{position:relative;flex:1;display:flex;justify-content:center;min-height:180px;}
 .depth{-webkit-appearance:none;appearance:none;width:170px;height:6px;border-radius:6px;outline:none;
-  transform:rotate(-90deg);margin:auto;cursor:ns-resize;
-  background:linear-gradient(90deg,#caa,#8d3b35 30%,#caa39e 55%,var(--bone) 100%);}
+  transform:rotate(90deg);margin:auto;cursor:ns-resize;
+  background:linear-gradient(90deg,#d9a88c,#caa39e 30%,#8d3b35 60%,var(--bone) 100%);}
 .depth::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;
   background:#f4ecdb;border:2px solid var(--jade-deep);box-shadow:0 2px 8px rgba(0,0,0,.4);}
 .depth::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#f4ecdb;

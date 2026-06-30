@@ -117,10 +117,11 @@ export const MUSCLES = [
     func: "몸통을 비틀고 옆으로 굽힌다. 복압을 만들어 허리를 보호.",
     asanas: [["파리브르타 트리코나아사나", "Parivrtta Trikonasana"], ["바시스타아사나", "Vasisthasana"]],
     matchers: [
-      "obliquus externus", "obliquus internus", "obliquus_externus", "obliquus_internus",
-      "external oblique", "internal oblique",
+      // Z-Anatomy 실제 이름: "External/Internal abdominal oblique muscle"
+      "external abdominal oblique", "internal abdominal oblique",
+      "obliquus externus abdominis", "obliquus internus abdominis",
+      // 다른 export 변형 대비 (눈·목의 oblique과 섞이지 않게 abdominal 포함형만)
       "abdominal external oblique", "abdominal internal oblique",
-      "abdominal_external_oblique", "abdominal_internal_oblique",
     ],
   },
   {

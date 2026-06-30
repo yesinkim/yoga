@@ -8,6 +8,22 @@ import { MUSCLES, matchMuscle } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
 
+// Draco 압축 glb 디코더 경로 (public/draco/, 로컬 호스팅 → 오프라인 동작)
+const DRACO_PATH = `${import.meta.env.BASE_URL}draco/`;
+
+// 레이어별 아틀라스 톤 틴트 (실제 모델 머티리얼이 창백해 레이어 구분이 약함 → 덧입힘)
+const LAYER_TINT = {
+  muscle: "#b0463c",   // 생크림빛 근육
+  skeleton: "#e8dcc1", // 아이보리 뼈
+  surface: "#d8a98c",  // 피부
+};
+// 메시 이름 기반 미세한 명도 변화 → 단색 덩어리로 안 보이게
+function shade(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return 0.84 + (h % 1000) / 1000 * 0.30; // 0.84 ~ 1.14
+}
+
 // 바깥 → 안쪽 순서. surface(피부)는 있으면 쓰고 없으면 건너뜀.
 const LAYER_ORDER = ["surface", "muscle", "skeleton"];
 const LAYER_FILES = {
@@ -25,15 +41,21 @@ class LayerBoundary extends React.Component {
 }
 
 function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
-  const gltf = useGLTF(url);
+  const gltf = useGLTF(url, DRACO_PATH);
   const cloned = useMemo(() => {
     const scene = gltf.scene.clone(true);
     const meshes = [];
+    const tint = LAYER_TINT[layerKey];
     scene.traverse((o) => {
       if (!o.isMesh) return;
       o.material = o.material.clone();
       o.material.transparent = true;
       o.material.depthWrite = true;
+      if (tint && o.material.color) {
+        o.material.color.set(tint).multiplyScalar(shade(o.name || layerKey));
+        if ("roughness" in o.material) o.material.roughness = 0.72;
+        if ("metalness" in o.material) o.material.metalness = 0.0;
+      }
       o.userData.baseColor = o.material.color.clone();
       o.userData.baseEmissive = o.material.emissive
         ? o.material.emissive.clone()
@@ -43,7 +65,7 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
       meshes.push(o);
     });
     return { scene, meshes };
-  }, [gltf, isMuscle]);
+  }, [gltf, isMuscle, layerKey]);
 
   useEffect(() => {
     register(layerKey, cloned);
