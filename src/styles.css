@@ -72,6 +72,44 @@ canvas{touch-action:none;}
 .empty-card .hint{font-size:13px;color:#9fb0bb;}
 .empty-card code{background:rgba(255,255,255,.08);padding:1px 6px;border-radius:5px;font-size:12.5px;}
 
+/* ── 검색 ──────────────────────────────────────────────────────────────── */
+.search-trigger{position:absolute;z-index:7;top:18px;right:22px;display:flex;align-items:center;
+  gap:7px;background:var(--glass);border:1px solid var(--glass-line);border-radius:22px;
+  padding:8px 14px;color:#c0ccd5;font-size:13px;cursor:pointer;backdrop-filter:blur(12px);
+  transition:background .18s;}
+.search-trigger:hover{background:rgba(255,255,255,.1);}
+.search-trigger kbd{margin-left:2px;border:1px solid rgba(255,255,255,.2);border-radius:5px;
+  padding:1px 5px;font-size:11px;background:rgba(255,255,255,.07);color:#9fb0bb;}
+
+.search-panel{position:absolute;z-index:9;top:14px;right:18px;width:320px;max-width:calc(100vw - 36px);
+  background:var(--glass);border:1px solid var(--glass-line);border-radius:18px;
+  overflow:hidden;backdrop-filter:blur(18px);box-shadow:0 24px 60px rgba(0,0,0,.5);}
+.search-header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--glass-line);}
+.search-input{flex:1;background:none;border:none;outline:none;color:#e9e2d2;font-size:14px;font-family:inherit;}
+.search-input::placeholder{color:#6a7d8a;}
+.search-close{border:none;background:none;color:#9fb0bb;font-size:20px;cursor:pointer;padding:0 2px;line-height:1;}
+.search-close:hover{color:#e9e2d2;}
+
+.search-list{list-style:none;margin:0;padding:6px 0;max-height:340px;overflow-y:auto;}
+.search-list::-webkit-scrollbar{width:4px;}
+.search-list::-webkit-scrollbar-track{background:transparent;}
+.search-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:4px;}
+.search-item{width:100%;border:none;background:none;text-align:left;padding:9px 16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;transition:background .12s;}
+.search-item:hover{background:rgba(255,255,255,.07);}
+.si-ko{font-family:"Noto Serif KR",serif;font-weight:600;font-size:14px;color:#f1ead9;white-space:nowrap;}
+.si-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:1;min-width:0;}
+.si-meta i{font-family:"Spectral",serif;font-style:italic;font-size:12px;color:#9fb0bb;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.si-group{font-size:10px;color:#5d8a72;font-weight:600;letter-spacing:.04em;}
+.search-empty{padding:14px 16px;font-size:13px;color:#6a7d8a;text-align:center;}
+
+/* ── 출처 푸터 ─────────────────────────────────────────────────────────── */
+.attribution{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);z-index:5;
+  font-size:11px;color:#546470;white-space:nowrap;pointer-events:none;}
+.attribution a{color:#5a7280;text-decoration:none;pointer-events:auto;}
+.attribution a:hover{color:#9fb0bb;}
+
 @media (max-width:760px){
   .console{left:12px;right:12px;top:auto;bottom:14px;transform:none;width:auto;border-radius:20px;padding:14px;gap:12px;}
   .depthwrap{min-height:0;width:100%;flex:none;}
@@ -81,5 +119,8 @@ canvas{touch-action:none;}
   .chip{flex:1;text-align:center;}
   .card{right:12px;left:12px;top:auto;bottom:170px;transform:none;width:auto;max-height:46vh;overflow:auto;}
   .masthead{left:14px;right:14px;}
+  .search-trigger{top:auto;right:12px;bottom:170px;}
+  .search-panel{right:12px;top:auto;bottom:230px;}
+  .attribution{display:none;}
 }
 :focus-visible{outline:2px solid var(--jade);outline-offset:2px;}

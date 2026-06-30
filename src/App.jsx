@@ -1,5 +1,5 @@
 import React, {
-  Suspense, useCallback, useEffect, useMemo, useRef, useState,
+  Suspense, useCallback, useEffect, useMemo, useRef, useState, memo,
 } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Bounds, useGLTF } from "@react-three/drei";
@@ -163,6 +163,8 @@ export default function App() {
         <h1>요가 해부학 레이어 뷰어</h1>
       </div>
 
+      <MuscleSearch muscles={MUSCLES} onSelect={setSelected} />
+
       {!anyLoaded && <EmptyState present={present} />}
 
       <div className="console">
@@ -184,6 +186,14 @@ export default function App() {
           ))}
         </div>
       </div>
+
+      <footer className="attribution">
+        3D 데이터:{" "}
+        <a href="https://www.z-anatomy.com/" target="_blank" rel="noreferrer">Z-Anatomy</a>
+        {" / "}
+        <a href="http://lifesciencedb.jp/bp3d/" target="_blank" rel="noreferrer">BodyParts3D</a>
+        {" "}— CC BY-SA 4.0
+      </footer>
 
       {selected && (
         <aside className="card">
@@ -216,6 +226,75 @@ export default function App() {
     </div>
   );
 }
+
+// ── 근육 검색 패널 ─────────────────────────────────────────────────────
+const MuscleSearch = memo(function MuscleSearch({ muscles, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.key === "/" || e.key === "f") && !e.target.matches("input")) {
+        e.preventDefault();
+        setOpen(true);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return muscles;
+    const lo = q.toLowerCase();
+    return muscles.filter((m) =>
+      m.ko.includes(lo) || m.la.toLowerCase().includes(lo) ||
+      m.group.includes(lo) || m.id.includes(lo)
+    );
+  }, [q, muscles]);
+
+  if (!open) {
+    return (
+      <button className="search-trigger" onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
+        title="근육 검색 (단축키: /)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+          <circle cx="8.5" cy="8.5" r="5.5"/><path d="m14 14 3 3"/>
+        </svg>
+        근육 검색
+        <kbd>/</kbd>
+      </button>
+    );
+  }
+
+  return (
+    <div className="search-panel">
+      <div className="search-header">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+          <circle cx="8.5" cy="8.5" r="5.5"/><path d="m14 14 3 3"/>
+        </svg>
+        <input ref={inputRef} className="search-input" type="text" placeholder="한글명·라틴명·부위 검색…"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="search-close" onClick={() => { setOpen(false); setQ(""); }} aria-label="닫기">×</button>
+      </div>
+      <ul className="search-list">
+        {results.map((m) => (
+          <li key={m.id}>
+            <button className="search-item" onClick={() => { onSelect(m); setOpen(false); setQ(""); }}>
+              <span className="si-ko">{m.ko}</span>
+              <span className="si-meta">
+                <i>{m.la}</i>
+                <span className="si-group">{m.group}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+        {results.length === 0 && <li className="search-empty">일치하는 근육이 없어요</li>}
+      </ul>
+    </div>
+  );
+});
 
 function EmptyState({ present }) {
   return (
