@@ -105,10 +105,46 @@ export const MUSCLES = [
     matchers: ["brachialis"],
   },
   {
-    id: "forearm_flexors", ko: "전완굴곡근군", la: "Flexores carpi", group: "팔뚝",
-    func: "손목을 굽히고 손가락을 쥔다. 팔을 지지하는 모든 자세에 동원.",
+    id: "flexor_carpi_radialis", ko: "요측수근굴근", la: "Flexor carpi radialis", group: "팔뚝(굴근)",
+    func: "손목을 굽히고 노뼈(엄지)쪽으로 치우친다. 팔 지지 자세에서 동원.",
     asanas: [["바카아사나", "Bakasana"], ["아도 무카 브륵샤아사나", "Adho Mukha Vrksasana"]],
-    matchers: ["flexor carpi", "flexor_carpi", "flexores carpi", "palmaris longus", "palmaris_longus"],
+    matchers: ["flexor carpi radialis"],
+  },
+  {
+    id: "flexor_carpi_ulnaris", ko: "척측수근굴근", la: "Flexor carpi ulnaris", group: "팔뚝(굴근)",
+    func: "손목을 굽히고 자뼈(새끼)쪽으로 치우친다.",
+    asanas: [["바카아사나", "Bakasana"], ["아도 무카 브륵샤아사나", "Adho Mukha Vrksasana"]],
+    matchers: ["flexor carpi ulnaris"],
+  },
+  {
+    id: "palmaris_longus", ko: "장장근", la: "Palmaris longus", group: "팔뚝(굴근)",
+    func: "손목 굽힘을 돕고 손바닥 널힘줄을 긴장시킨다. (일부 사람은 결여)",
+    asanas: [["바카아사나", "Bakasana"], ["팔라카아사나", "Phalakasana"]],
+    matchers: ["palmaris longus", "palmaris_longus"],
+  },
+  {
+    id: "flexor_digitorum_superficialis", ko: "천지굴근", la: "Flexor digitorum superficialis", group: "팔뚝(굴근)",
+    func: "손가락 중간마디를 굽힌다. 무게를 손가락으로 받칠 때 작용.",
+    asanas: [["바카아사나", "Bakasana"], ["아도 무카 브륵샤아사나", "Adho Mukha Vrksasana"]],
+    matchers: ["flexor digitorum superficialis"],
+  },
+  {
+    id: "flexor_digitorum_profundus", ko: "심지굴근", la: "Flexor digitorum profundus", group: "팔뚝(굴근)",
+    func: "손가락 끝마디를 굽혀 강하게 쥔다.",
+    asanas: [["바카아사나", "Bakasana"], ["아도 무카 브륵샤아사나", "Adho Mukha Vrksasana"]],
+    matchers: ["flexor digitorum profundus"],
+  },
+  {
+    id: "pronator_teres", ko: "원회내근", la: "Pronator teres", group: "팔뚝(굴근)",
+    func: "아래팔을 안으로 돌린다(회내). 팔꿈치 굽힘도 돕는다.",
+    asanas: [["차투랑가 단다아사나", "Chaturanga Dandasana"], ["바카아사나", "Bakasana"]],
+    matchers: ["pronator teres"],
+  },
+  {
+    id: "pronator_quadratus", ko: "방형회내근", la: "Pronator quadratus", group: "팔뚝(굴근)",
+    func: "손목 근처에서 아래팔을 안으로 돌린다(회내)의 주동근.",
+    asanas: [["차투랑가 단다아사나", "Chaturanga Dandasana"], ["팔라카아사나", "Phalakasana"]],
+    matchers: ["pronator quadratus"],
   },
 
   // ── 코어 ──────────────────────────────────────────────────────────────
@@ -161,10 +197,29 @@ export const MUSCLES = [
 
   // ── 등 ────────────────────────────────────────────────────────────────
   {
-    id: "erector_spinae", ko: "척추기립근", la: "Erector spinae", group: "등(심부)",
-    func: "척추를 곧게 펴고 자세를 지탱한다. 후굴의 주동근.",
+    id: "iliocostalis", ko: "장늑근", la: "Iliocostalis", group: "등(심부) · 척추기립근",
+    func: "척추기립근의 가장 바깥 기둥. 척추를 펴고 같은 쪽으로 옆굽힘. 후굴을 돕는다.",
     asanas: [["부장가아사나", "Bhujangasana"], ["살라바아사나", "Salabhasana"]],
-    matchers: ["erector spinae", "erector_spinae", "iliocostalis", "longissimus", "spinalis"],
+    matchers: ["iliocostalis"],
+  },
+  {
+    id: "longissimus", ko: "최장근", la: "Longissimus", group: "등(심부) · 척추기립근",
+    func: "척추기립근의 가운데 기둥이자 가장 길다. 척추와 머리를 펴고 자세를 지탱.",
+    asanas: [["부장가아사나", "Bhujangasana"], ["우스트라아사나", "Ustrasana"]],
+    matchers: ["longissimus", "erector spinae", "erector_spinae"],
+  },
+  {
+    // semispinalis 는 spinalis(극근)보다 앞에 둬야 "spinalis" 매처에 안 걸림
+    id: "semispinalis", ko: "반극근", la: "Semispinalis", group: "등(심부) · 횡돌기극근",
+    func: "머리·목·등을 펴고 반대쪽으로 회전. 목 후굴의 심부 안정근.",
+    asanas: [["마츠야아사나", "Matsyasana"], ["우스트라아사나", "Ustrasana"]],
+    matchers: ["semispinalis"],
+  },
+  {
+    id: "spinalis", ko: "극근", la: "Spinalis", group: "등(심부) · 척추기립근",
+    func: "척추기립근의 가장 안쪽 기둥. 척추를 곧게 펴 자세를 세운다.",
+    asanas: [["부장가아사나", "Bhujangasana"], ["살라바아사나", "Salabhasana"]],
+    matchers: ["spinalis"],
   },
   {
     id: "multifidus", ko: "다열근", la: "Multifidus", group: "등(심부)",
@@ -179,10 +234,16 @@ export const MUSCLES = [
     matchers: ["latissimus dorsi", "latissimus_dorsi", "latissimus"],
   },
   {
-    id: "rhomboids", ko: "마름근", la: "Rhomboidei", group: "등 · 어깨",
-    func: "견갑골을 척추 쪽으로 끌어당기고 올린다. 등 당기기·후굴 준비에 필요.",
+    id: "rhomboid_major", ko: "대능형근", la: "Rhomboid major", group: "등 · 어깨",
+    func: "견갑골을 척추 쪽으로 모으고 아래로 회전. 등 당기기·후굴 준비에 필요.",
     asanas: [["살라바아사나", "Salabhasana"], ["세투 반다 사르방가아사나", "Setu Bandha Sarvangasana"]],
-    matchers: ["rhomboid major", "rhomboid minor", "rhomboid_major", "rhomboid_minor", "rhomboids"],
+    matchers: ["rhomboid major", "rhomboid_major"],
+  },
+  {
+    id: "rhomboid_minor", ko: "소능형근", la: "Rhomboid minor", group: "등 · 어깨",
+    func: "대능형근 위쪽에서 견갑골을 척추 쪽으로 모은다.",
+    asanas: [["살라바아사나", "Salabhasana"], ["세투 반다 사르방가아사나", "Setu Bandha Sarvangasana"]],
+    matchers: ["rhomboid minor", "rhomboid_minor"],
   },
   {
     id: "teres_major", ko: "대원근", la: "Teres major", group: "등 · 어깨",
@@ -225,22 +286,82 @@ export const MUSCLES = [
 
   // ── 허벅지 ───────────────────────────────────────────────────────────
   {
-    id: "quadriceps", ko: "대퇴사두근", la: "Quadriceps femoris", group: "허벅지 앞",
-    func: "무릎을 곧게 펴고 고관절을 굽힌다. 서 있는 자세를 받친다.",
+    id: "rectus_femoris", ko: "대퇴직근", la: "Rectus femoris", group: "허벅지 앞 · 대퇴사두근",
+    func: "대퇴사두근 중 유일하게 고관절을 지나 무릎 폄+고관절 굽힘. 서기·차기의 핵심.",
+    asanas: [["우트카타아사나", "Utkatasana"], ["비라바드라아사나 I", "Virabhadrasana I"]],
+    matchers: ["rectus femoris", "rectus_femoris"],
+  },
+  {
+    id: "vastus_lateralis", ko: "외측광근", la: "Vastus lateralis", group: "허벅지 앞 · 대퇴사두근",
+    func: "대퇴사두근의 바깥 갈래. 무릎을 곧게 편다.",
     asanas: [["우트카타아사나", "Utkatasana"], ["비라바드라아사나 II", "Virabhadrasana II"]],
-    matchers: ["rectus femoris", "rectus_femoris", "vastus lateralis", "vastus medialis", "vastus intermedius", "vastus_lateralis", "vastus_medialis", "vastus_intermedius", "quadriceps"],
+    matchers: ["vastus lateralis", "vastus_lateralis"],
   },
   {
-    id: "hamstrings", ko: "햄스트링", la: "Hamstrings", group: "허벅지 뒤",
-    func: "무릎을 굽히고 고관절을 펴낸다. 전굴에서 가장 길게 늘어난다.",
+    id: "vastus_medialis", ko: "내측광근", la: "Vastus medialis", group: "허벅지 앞 · 대퇴사두근",
+    func: "대퇴사두근의 안쪽 갈래. 무릎 폄 마지막 각도와 슬개골 안정에 관여.",
+    asanas: [["우트카타아사나", "Utkatasana"], ["세투 반다 사르방가아사나", "Setu Bandha Sarvangasana"]],
+    matchers: ["vastus medialis", "vastus_medialis"],
+  },
+  {
+    id: "vastus_intermedius", ko: "중간광근", la: "Vastus intermedius", group: "허벅지 앞 · 대퇴사두근",
+    func: "대퇴직근 아래 깊은 갈래. 무릎을 편다.",
+    asanas: [["우트카타아사나", "Utkatasana"], ["단다아사나", "Dandasana"]],
+    matchers: ["vastus intermedius", "vastus_intermedius"],
+  },
+  {
+    id: "biceps_femoris", ko: "대퇴이두근", la: "Biceps femoris", group: "허벅지 뒤 · 햄스트링",
+    func: "햄스트링의 바깥 근육(장두·단두). 무릎 굽힘+고관절 폄, 정강이 바깥돌림.",
     asanas: [["우타나아사나", "Uttanasana"], ["파스치모타나아사나", "Paschimottanasana"]],
-    matchers: ["biceps femoris", "biceps_femoris", "semitendinosus", "semimembranosus", "hamstring"],
+    matchers: ["biceps femoris", "biceps_femoris"],
   },
   {
-    id: "adductors", ko: "내전근군", la: "Adductores", group: "허벅지 안쪽",
-    func: "다리를 몸 중심선으로 모은다. 고관절 개방 자세에서 늘어난다.",
+    id: "semitendinosus", ko: "반건양근", la: "Semitendinosus", group: "허벅지 뒤 · 햄스트링",
+    func: "햄스트링 안쪽. 무릎 굽힘+고관절 폄. 무릎 안쪽 거위발건(pes anserinus)을 이루는 세 근육 중 하나.",
+    asanas: [["우타나아사나", "Uttanasana"], ["파스치모타나아사나", "Paschimottanasana"]],
+    matchers: ["semitendinosus"],
+  },
+  {
+    id: "semimembranosus", ko: "반막양근", la: "Semimembranosus", group: "허벅지 뒤 · 햄스트링",
+    func: "햄스트링 안쪽 심부. 무릎 굽힘+고관절 폄, 정강이 안쪽돌림.",
+    asanas: [["우타나아사나", "Uttanasana"], ["파스치모타나아사나", "Paschimottanasana"]],
+    matchers: ["semimembranosus"],
+  },
+  {
+    id: "adductor_magnus", ko: "대내전근", la: "Adductor magnus", group: "허벅지 안쪽 · 내전근",
+    func: "가장 큰 내전근. 다리를 모으고 고관절을 편다(후방섬유). 받다코나 계열에서 늘어남.",
     asanas: [["받다 코나아사나", "Baddha Konasana"], ["우파비스타 코나아사나", "Upavistha Konasana"]],
-    matchers: ["adductor magnus", "adductor longus", "adductor brevis", "adductor_magnus", "adductor_longus", "adductor_brevis", "gracilis", "pectineus"],
+    matchers: ["adductor magnus", "adductor_magnus", "adductor minimus"],
+  },
+  {
+    id: "adductor_longus", ko: "장내전근", la: "Adductor longus", group: "허벅지 안쪽 · 내전근",
+    func: "내전근 앞쪽. 다리를 모으고 고관절 굽힘을 돕는다.",
+    asanas: [["받다 코나아사나", "Baddha Konasana"], ["우파비스타 코나아사나", "Upavistha Konasana"]],
+    matchers: ["adductor longus", "adductor_longus"],
+  },
+  {
+    id: "adductor_brevis", ko: "단내전근", la: "Adductor brevis", group: "허벅지 안쪽 · 내전근",
+    func: "장내전근 아래 짧은 내전근. 다리를 모은다.",
+    asanas: [["받다 코나아사나", "Baddha Konasana"], ["우파비스타 코나아사나", "Upavistha Konasana"]],
+    matchers: ["adductor brevis", "adductor_brevis"],
+  },
+  {
+    id: "gracilis", ko: "박근", la: "Gracilis", group: "허벅지 안쪽 · 내전근",
+    func: "내전근 중 가장 얇고 길다. 다리 모음+무릎 굽힘. 무릎 안쪽 거위발건(pes anserinus)을 이루는 세 근육 중 하나.",
+    asanas: [["받다 코나아사나", "Baddha Konasana"], ["우파비스타 코나아사나", "Upavistha Konasana"]],
+    matchers: ["gracilis"],
+  },
+  {
+    id: "pectineus", ko: "치골근", la: "Pectineus", group: "허벅지 안쪽 · 내전근",
+    func: "치골에서 시작하는 짧은 내전·굴곡근. 고관절을 모으고 굽힌다.",
+    asanas: [["받다 코나아사나", "Baddha Konasana"], ["안자네야아사나", "Anjaneyasana"]],
+    matchers: ["pectineus"],
+  },
+  {
+    id: "sartorius", ko: "봉공근", la: "Sartorius", group: "허벅지 앞 · 골반",
+    func: "몸에서 가장 긴 근육. 고관절 굽힘·외전·외회전 + 무릎 굽힘(책상다리 자세 근육). 무릎 안쪽 거위발건(pes anserinus)을 이루는 세 근육 중 하나.",
+    asanas: [["받다 코나아사나", "Baddha Konasana"], ["비라바드라아사나 II", "Virabhadrasana II"]],
+    matchers: ["sartorius"],
   },
 
   // ── 종아리·발 ─────────────────────────────────────────────────────────

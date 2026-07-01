@@ -7,6 +7,10 @@ import * as THREE from "three";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
+// three는 visible=false 여도 raycast 하므로, 숨긴 메시는 raycast 자체를 꺼서
+// 클릭이 통과해 안쪽 근육이 잡히게 한다. 복원 시 원래 raycast로 되돌린다.
+const NOOP_RAYCAST = () => {};
+const MESH_RAYCAST = THREE.Mesh.prototype.raycast;
 
 // Draco 압축 glb 디코더 경로 (public/draco/, 로컬 호스팅 → 오프라인 동작)
 const DRACO_PATH = `${import.meta.env.BASE_URL}draco/`;
@@ -157,13 +161,15 @@ function applyDepth(layers, depth, selectedId, focusIds, hidden) {
     if (key === "surface") base *= 0.55;
 
     layers[key].meshes.forEach((m) => {
-      // 개별 벗기기로 숨긴 메시는 깊이와 무관하게 감춤
+      // 개별 벗기기로 숨긴 메시는 깊이와 무관하게 감추고, 클릭도 통과시킴
       if (hidden && hidden.has(m)) {
         m.material.opacity = 0;
         m.visible = false;
         m.material.depthWrite = false;
+        m.raycast = NOOP_RAYCAST;   // 안쪽 근육이 클릭되도록
         return;
       }
+      m.raycast = MESH_RAYCAST;     // 벗기지 않은(복원된) 메시는 다시 클릭 가능
       const id = m.userData.muscleId;
       let op = base;
       let hl = false;
@@ -199,6 +205,7 @@ export default function App() {
   const [selected, setSelected] = useState(null); // muscle obj | {raw} | null
   const [focus, setFocus] = useState(null); // { kind, title, sub, ids:Set, list:[muscle] } | null
   const [hovering, setHovering] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false); // 받은 제안 목록 패널
   const [peelMode, setPeelMode] = useState(false);   // 클릭으로 근육 벗기기
   const peelRef = useRef(false);                      // onPick 안정 콜백용
   const hiddenRef = useRef(new Set());                // 벗겨진(숨긴) 메시들
@@ -371,8 +378,138 @@ export default function App() {
                 해당 근육 <code>matchers</code>에 <b>{selected.raw}</b> 키워드를 추가하면 다음부터 인식됩니다.</p></div>
             </>
           )}
+          <SuggestBox muscle={selected} />
         </aside>
       )}
+
+      <button className="review-btn" onClick={() => setReviewOpen(true)} title="접수된 수정 제안 보기">
+        ✎ 받은 제안
+      </button>
+      {reviewOpen && <SuggestionsPanel onClose={() => setReviewOpen(false)} />}
+    </div>
+  );
+}
+
+// ── 정보 수정 제안 (카드 안) ────────────────────────────────────────────
+const FIELDS = [
+  ["func", "기능 설명"], ["ko", "한글명"], ["la", "라틴명"],
+  ["group", "부위"], ["asanas", "관련 아사나"], ["other", "기타"],
+];
+function SuggestBox({ muscle }) {
+  const [open, setOpen] = useState(false);
+  const [field, setField] = useState("func");
+  const [text, setText] = useState("");
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState(null);
+
+  // 근육이 바뀌면 폼 초기화
+  useEffect(() => { setOpen(false); setText(""); setNote(""); setSent(false); setErr(null); }, [muscle]);
+
+  const submit = async () => {
+    if (!text.trim()) return;
+    setErr(null);
+    try {
+      const res = await fetch("/api/suggestions", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          muscleId: muscle.id || null, ko: muscle.ko || muscle.raw || null,
+          field, suggestion: text, note,
+        }),
+      });
+      if (!res.ok) throw new Error("서버 응답 " + res.status);
+      setSent(true); setText(""); setNote("");
+    } catch (e) {
+      setErr("전송 실패 — 로컬 DB 서버가 켜져 있나요? (npm run server)");
+    }
+  };
+
+  if (!open) {
+    return (
+      <button className="suggest-open" onClick={() => setOpen(true)}>✎ 정보 수정 제안</button>
+    );
+  }
+  return (
+    <div className="suggest">
+      <div className="h">정보 수정 제안</div>
+      {sent ? (
+        <div className="suggest-done">
+          제안이 접수됐어요. 감사합니다! 🙏
+          <button className="suggest-again" onClick={() => setSent(false)}>다른 제안 더 하기</button>
+        </div>
+      ) : (
+        <>
+          <label className="suggest-row">
+            <span>항목</span>
+            <select value={field} onChange={(e) => setField(e.target.value)}>
+              {FIELDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <textarea className="suggest-text" rows={3} placeholder="수정/추가할 내용을 적어주세요"
+            value={text} onChange={(e) => setText(e.target.value)} />
+          <input className="suggest-note" placeholder="근거·출처 (선택)" value={note}
+            onChange={(e) => setNote(e.target.value)} />
+          {err && <div className="suggest-err">{err}</div>}
+          <div className="suggest-actions">
+            <button className="suggest-cancel" onClick={() => setOpen(false)}>취소</button>
+            <button className="suggest-send" onClick={submit} disabled={!text.trim()}>제안 보내기</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 받은 제안 목록 패널 ─────────────────────────────────────────────────
+function SuggestionsPanel({ onClose }) {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState(null);
+  const fieldLabel = (f) => (FIELDS.find(([v]) => v === f)?.[1] || f);
+
+  const load = async () => {
+    try {
+      const res = await fetch("/api/suggestions");
+      if (!res.ok) throw new Error();
+      setRows(await res.json());
+    } catch { setErr("목록을 못 불러왔어요 — 로컬 DB 서버(npm run server)를 확인하세요."); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggleStatus = async (r) => {
+    const status = r.status === "resolved" ? "open" : "resolved";
+    await fetch(`/api/suggestions/${r.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }).catch(() => {});
+    load();
+  };
+
+  return (
+    <div className="review-overlay" onClick={onClose}>
+      <div className="review" onClick={(e) => e.stopPropagation()}>
+        <div className="review-head">
+          <h2>받은 수정 제안 {rows ? `(${rows.length})` : ""}</h2>
+          <button className="x" onClick={onClose} aria-label="닫기">×</button>
+        </div>
+        {err && <p className="review-err">{err}</p>}
+        {rows && rows.length === 0 && <p className="review-empty">아직 접수된 제안이 없어요.</p>}
+        <ul className="review-list">
+          {rows?.map((r) => (
+            <li key={r.id} className={r.status === "resolved" ? "done" : ""}>
+              <div className="rl-top">
+                <b>{r.ko || "(미매핑)"}</b>
+                <span className="rl-field">{fieldLabel(r.field)}</span>
+                <span className="rl-date">{new Date(r.ts).toLocaleString("ko-KR")}</span>
+                <button className="rl-status" onClick={() => toggleStatus(r)}>
+                  {r.status === "resolved" ? "✓ 처리됨" : "미처리"}
+                </button>
+              </div>
+              <p className="rl-sug">{r.suggestion}</p>
+              {r.note && <p className="rl-note">근거: {r.note}</p>}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

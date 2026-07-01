@@ -109,6 +109,59 @@ canvas{touch-action:none;}
 .empty-card .hint{font-size:13px;color:#9fb0bb;}
 .empty-card code{background:rgba(255,255,255,.08);padding:1px 6px;border-radius:5px;font-size:12.5px;}
 
+/* ── 정보 수정 제안 (카드 안) ──────────────────────────────────────────── */
+.suggest-open{margin-top:16px;width:100%;font-family:inherit;font-size:12.5px;font-weight:600;
+  color:var(--jade-deep);background:rgba(93,138,114,.12);border:1px solid rgba(93,138,114,.3);
+  border-radius:9px;padding:9px;cursor:pointer;transition:all .15s;}
+.suggest-open:hover{background:rgba(93,138,114,.2);}
+.suggest{margin-top:16px;border-top:1px solid rgba(125,107,80,.25);padding-top:12px;}
+.suggest .h{font-family:"Spectral",serif;font-style:italic;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--sepia);margin-bottom:8px;}
+.suggest-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5a513f;margin-bottom:8px;}
+.suggest-row select{flex:1;font-family:inherit;font-size:12.5px;padding:5px 8px;border-radius:7px;
+  border:1px solid var(--parchment-edge);background:#fff;color:var(--ink);}
+.suggest-text,.suggest-note{width:100%;font-family:inherit;font-size:13px;border:1px solid var(--parchment-edge);
+  border-radius:8px;padding:8px;background:#fff;color:var(--ink);resize:vertical;margin-bottom:8px;}
+.suggest-text:focus,.suggest-note:focus{outline:2px solid var(--jade);border-color:var(--jade);}
+.suggest-actions{display:flex;gap:8px;justify-content:flex-end;}
+.suggest-cancel{font-family:inherit;font-size:12.5px;border:none;background:rgba(125,107,80,.12);
+  color:var(--sepia);border-radius:8px;padding:7px 12px;cursor:pointer;}
+.suggest-send{font-family:inherit;font-size:12.5px;font-weight:700;border:none;background:var(--jade);
+  color:#0e1b14;border-radius:8px;padding:7px 14px;cursor:pointer;}
+.suggest-send:disabled{opacity:.45;cursor:not-allowed;}
+.suggest-err{font-size:12px;color:#a8413a;margin-bottom:8px;}
+.suggest-done{font-size:13px;color:var(--jade-deep);line-height:1.6;}
+.suggest-again{display:block;margin-top:8px;font-family:inherit;font-size:12px;border:none;
+  background:rgba(93,138,114,.14);color:var(--jade-deep);border-radius:8px;padding:6px 10px;cursor:pointer;}
+
+/* ── 받은 제안 목록 ─────────────────────────────────────────────────────── */
+.review-btn{position:absolute;z-index:7;left:20px;bottom:14px;font-family:inherit;font-size:12px;
+  color:#c0ccd5;background:var(--glass);border:1px solid var(--glass-line);border-radius:20px;
+  padding:8px 13px;cursor:pointer;backdrop-filter:blur(12px);}
+.review-btn:hover{background:rgba(255,255,255,.1);}
+.review-overlay{position:fixed;inset:0;z-index:20;background:rgba(8,12,18,.6);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;padding:24px;}
+.review{width:min(620px,100%);max-height:82vh;overflow:auto;background:linear-gradient(180deg,#f7f0e1,#efe5cf);
+  border:1px solid var(--parchment-edge);border-radius:18px;padding:22px;color:var(--ink);box-shadow:0 24px 70px rgba(0,0,0,.55);}
+.review-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.review-head h2{font-family:"Noto Serif KR",serif;font-size:20px;margin:0;}
+.review-head .x{position:static;width:30px;height:30px;border:none;border-radius:50%;
+  background:rgba(125,107,80,.12);color:var(--sepia);font-size:17px;cursor:pointer;}
+.review-err{color:#a8413a;font-size:13px;}
+.review-empty{color:var(--sepia);font-size:14px;}
+.review-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.review-list li{background:#fff;border:1px solid var(--parchment-edge);border-radius:12px;padding:12px 14px;}
+.review-list li.done{opacity:.55;}
+.rl-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.rl-top b{font-family:"Noto Serif KR",serif;font-size:14px;}
+.rl-field{font-size:11px;font-weight:700;color:var(--jade-deep);background:rgba(93,138,114,.14);border-radius:6px;padding:2px 7px;}
+.rl-date{font-size:11px;color:var(--sepia);}
+.rl-status{margin-left:auto;font-family:inherit;font-size:11px;font-weight:700;border:1px solid var(--parchment-edge);
+  background:#faf6ec;color:var(--sepia);border-radius:7px;padding:3px 9px;cursor:pointer;}
+.review-list li.done .rl-status{background:var(--jade);border-color:var(--jade);color:#0e1b14;}
+.rl-sug{margin:0;font-size:13.5px;line-height:1.5;color:#3f3a2e;}
+.rl-note{margin:5px 0 0;font-size:12px;color:var(--sepia);}
+
 /* ── 검색 ──────────────────────────────────────────────────────────────── */
 .search-trigger{position:absolute;z-index:7;top:18px;right:22px;display:flex;align-items:center;
   gap:7px;background:var(--glass);border:1px solid var(--glass-line);border-radius:22px;
