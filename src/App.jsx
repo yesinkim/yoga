@@ -2,7 +2,7 @@ import React, {
   Suspense, useCallback, useEffect, useMemo, useRef, useState, memo,
 } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls, useGLTF, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
@@ -280,6 +280,8 @@ export default function App() {
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
+  // 필수 두 레이어가 모두 "없음"으로 확정된 경우에만 안내(그 전엔 로딩 중)
+  const bothMissing = present.muscle === false && present.skeleton === false;
 
   return (
     <div className="wrap" style={{ cursor: hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
@@ -318,7 +320,8 @@ export default function App() {
         </div>
       )}
 
-      {!anyLoaded && <EmptyState present={present} />}
+      {!anyLoaded && !bothMissing && <LoadingOverlay />}
+      {bothMissing && <EmptyState present={present} />}
 
       <div className="console">
         <span className="lab">표층</span>
@@ -594,6 +597,19 @@ const MuscleSearch = memo(function MuscleSearch({ muscles, onSelect }) {
     </div>
   );
 });
+
+function LoadingOverlay() {
+  const { progress } = useProgress();
+  return (
+    <div className="loading">
+      <div className="loading-card">
+        <div className="spinner" />
+        <p>해부 모델 불러오는 중… {Math.round(progress)}%</p>
+        <span>근육·골격 약 12MB (Draco 압축)</span>
+      </div>
+    </div>
+  );
+}
 
 function EmptyState({ present }) {
   return (

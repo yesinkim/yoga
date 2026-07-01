@@ -84,7 +84,13 @@ export const MUSCLES = [
     id: "serratus", ko: "전거근", la: "Serratus anterior", group: "가슴 옆",
     func: "견갑골을 흉곽에 밀착시키고 앞으로 밀어낸다. 팔을 머리 위로 들 때 필수.",
     asanas: [["아도 무카 스바나아사나", "Adho Mukha Svanasana"], ["바시스타아사나", "Vasisthasana"]],
-    matchers: ["serratus anterior", "serratus_anterior", "serratus"],
+    matchers: ["serratus anterior", "serratus_anterior"],
+  },
+  {
+    id: "serratus_posterior", ko: "후거근", la: "Serratus posterior", group: "등(심부) · 호흡보조",
+    func: "상부는 늑골을 올려 흡기를, 하부는 늑골을 내려 호기를 돕는 호흡 보조근.",
+    asanas: [["우자이 프라나야마", "Ujjayi Pranayama"], ["부장가아사나", "Bhujangasana"]],
+    matchers: ["serratus posterior"],
   },
   {
     id: "biceps", ko: "상완이두근", la: "Biceps brachii", group: "팔",
@@ -382,6 +388,193 @@ export const MUSCLES = [
     func: "발목을 위로 들고(배측굴곡) 발 안쪽을 올린다. 보행·균형의 핵심.",
     asanas: [["우타나아사나", "Uttanasana"], ["타다아사나", "Tadasana"]],
     matchers: ["tibialis anterior", "tibialis_anterior"],
+  },
+  {
+    id: "tibialis_posterior", ko: "후경골근", la: "Tibialis posterior", group: "종아리(심부)",
+    func: "발끝을 밀고 발 안쪽 아치를 들어 올린다(내번). 발아치 지지의 핵심.",
+    asanas: [["타다아사나", "Tadasana"], ["브륵샤아사나", "Vrksasana"]],
+    matchers: ["tibialis posterior"],
+  },
+  {
+    id: "fibularis_longus", ko: "긴종아리근", la: "Fibularis longus", group: "종아리 바깥",
+    func: "발을 바깥으로 젖히고(외번) 저측굴곡. 발목 가쪽 안정과 아치 지지.",
+    asanas: [["타다아사나", "Tadasana"], ["비라바드라아사나 II", "Virabhadrasana II"]],
+    matchers: ["fibularis longus", "peroneus longus"],
+  },
+  {
+    id: "fibularis_brevis", ko: "짧은종아리근", la: "Fibularis brevis", group: "종아리 바깥",
+    func: "발을 바깥으로 젖힌다(외번). 발목 가쪽 안정.",
+    asanas: [["타다아사나", "Tadasana"], ["우티타 트리코나아사나", "Utthita Trikonasana"]],
+    matchers: ["fibularis brevis", "peroneus brevis"],
+  },
+  {
+    id: "fibularis_tertius", ko: "셋째종아리근", la: "Fibularis tertius", group: "종아리 바깥",
+    func: "발목을 위로 들고(배측굴곡) 바깥으로 젖힌다.",
+    asanas: [["타다아사나", "Tadasana"], ["우타나아사나", "Uttanasana"]],
+    matchers: ["fibularis tertius", "peroneus tertius"],
+  },
+  {
+    id: "popliteus", ko: "오금근", la: "Popliteus", group: "무릎 뒤(심부)",
+    func: "정강이를 안으로 돌려 무릎을 '풀어' 굽힘을 시작한다. 무릎 안정근.",
+    asanas: [["말라아사나", "Malasana"], ["비라아사나", "Virasana"]],
+    matchers: ["popliteus"],
+  },
+  {
+    id: "plantaris", ko: "장딴지빗근", la: "Plantaris", group: "종아리",
+    func: "비복근을 보조해 발목 저측굴곡·무릎 굽힘을 돕는 가느다란 근육.",
+    asanas: [["아도 무카 스바나아사나", "Adho Mukha Svanasana"], ["타다아사나", "Tadasana"]],
+    matchers: ["plantaris"],
+  },
+
+  // ── 코어·허리(심부) ──────────────────────────────────────────────────
+  {
+    id: "quadratus_lumborum", ko: "요방형근", la: "Quadratus lumborum", group: "허리(심부)",
+    func: "골반과 12번 늑골·요추를 잇는 심부근. 몸통 옆굽힘과 허리 안정의 핵심.",
+    asanas: [["우티타 트리코나아사나", "Utthita Trikonasana"], ["파리가아사나", "Parighasana"]],
+    matchers: ["quadratus lumborum"],
+  },
+  {
+    id: "pyramidalis", ko: "추체근", la: "Pyramidalis", group: "코어",
+    func: "복직근 아래 삼각형 작은 근육. 백선(linea alba)을 긴장시킨다.",
+    asanas: [["나바아사나", "Navasana"], ["우디야나 반다", "Uddiyana Bandha"]],
+    matchers: ["pyramidalis"],
+  },
+
+  // ── 골반저근 (물라 반다) ──────────────────────────────────────────────
+  {
+    id: "pubococcygeus", ko: "치골미골근", la: "Pubococcygeus", group: "골반저근",
+    func: "골반저(항문거근)의 앞부분. 골반 장기를 받치고 복압·물라 반다에 관여.",
+    asanas: [["물라 반다", "Mula Bandha"], ["우디야나 반다", "Uddiyana Bandha"]],
+    matchers: ["pubococcygeus", "pubo analis", "pubo-analis"],
+  },
+  {
+    id: "iliococcygeus", ko: "장골미골근", la: "Iliococcygeus", group: "골반저근",
+    func: "골반저(항문거근)의 뒷부분. 골반저를 위로 끌어올려 받친다.",
+    asanas: [["물라 반다", "Mula Bandha"], ["아쉬위니 무드라", "Ashwini Mudra"]],
+    matchers: ["iliococcygeus"],
+  },
+  {
+    id: "coccygeus", ko: "미골근", la: "Coccygeus", group: "골반저근",
+    func: "꼬리뼈를 앞으로 당기고 골반저 뒤쪽을 지지한다.",
+    asanas: [["물라 반다", "Mula Bandha"], ["세투 반다 사르방가아사나", "Setu Bandha Sarvangasana"]],
+    matchers: ["coccygeus"],
+  },
+
+  // ── 심부 고관절 외회전근 (이상근과 한 팀) ──────────────────────────────
+  {
+    id: "superior_gemellus", ko: "위쌍둥이근", la: "Superior gemellus", group: "고관절(심부)",
+    func: "내폐쇄근과 함께 고관절을 바깥으로 돌린다. 심부 외회전 6근 중 하나.",
+    asanas: [["에카 파다 라자카포타아사나", "Eka Pada Rajakapotasana"], ["고무카아사나", "Gomukhasana"]],
+    matchers: ["superior gemellus"],
+  },
+  {
+    id: "inferior_gemellus", ko: "아래쌍둥이근", la: "Inferior gemellus", group: "고관절(심부)",
+    func: "내폐쇄근과 함께 고관절을 바깥으로 돌린다. 심부 외회전 6근 중 하나.",
+    asanas: [["에카 파다 라자카포타아사나", "Eka Pada Rajakapotasana"], ["고무카아사나", "Gomukhasana"]],
+    matchers: ["inferior gemellus"],
+  },
+  {
+    id: "quadratus_femoris", ko: "대퇴방형근", la: "Quadratus femoris", group: "고관절(심부)",
+    func: "고관절을 강하게 바깥으로 돌린다. 심부 외회전 6근 중 하나.",
+    asanas: [["에카 파다 라자카포타아사나", "Eka Pada Rajakapotasana"], ["바라드바자아사나", "Bharadvajasana"]],
+    matchers: ["quadratus femoris"],
+  },
+  {
+    id: "obturator_internus", ko: "내폐쇄근", la: "Obturator internus", group: "고관절(심부)",
+    func: "골반 안쪽에서 나와 고관절을 바깥으로 돌린다. 심부 외회전 6근 중 하나.",
+    asanas: [["에카 파다 라자카포타아사나", "Eka Pada Rajakapotasana"], ["받다 코나아사나", "Baddha Konasana"]],
+    matchers: ["obturator internus"],
+  },
+  {
+    id: "obturator_externus", ko: "외폐쇄근", la: "Obturator externus", group: "고관절(심부)",
+    func: "고관절을 바깥으로 돌리고 모은다. 심부 외회전근.",
+    asanas: [["에카 파다 라자카포타아사나", "Eka Pada Rajakapotasana"], ["받다 코나아사나", "Baddha Konasana"]],
+    matchers: ["obturator externus"],
+  },
+
+  // ── 목(심부·표층) ────────────────────────────────────────────────────
+  {
+    id: "levator_scapulae", ko: "견갑거근", la: "Levator scapulae", group: "목 · 어깨",
+    func: "견갑골을 끌어올리고 목을 옆으로 굽힌다. 어깨 결림·자세 불량과 밀접.",
+    asanas: [["발라아사나", "Balasana"], ["숩타 밧다 코나아사나", "Supta Baddha Konasana"]],
+    matchers: ["levator scapulae"],
+  },
+  {
+    id: "splenius_capitis", ko: "머리널판근", la: "Splenius capitis", group: "목(심부)",
+    func: "머리를 뒤로 젖히고 같은 쪽으로 돌린다. 목 후굴의 주동근.",
+    asanas: [["우스트라아사나", "Ustrasana"], ["마츠야아사나", "Matsyasana"]],
+    matchers: ["splenius capitis"],
+  },
+  {
+    id: "splenius_cervicis", ko: "목널판근", la: "Splenius cervicis", group: "목(심부)",
+    func: "목을 뒤로 젖히고 같은 쪽으로 돌린다.",
+    asanas: [["우스트라아사나", "Ustrasana"], ["부장가아사나", "Bhujangasana"]],
+    matchers: ["splenius colli", "splenius cervicis"],
+  },
+  {
+    id: "longus_colli", ko: "목긴근", la: "Longus colli", group: "목(심부)",
+    func: "목뼈 앞쪽 심부 굴근. 목을 앞으로 굽히고 안정시킨다. 잘란다라 반다와 관련.",
+    asanas: [["잘란다라 반다", "Jalandhara Bandha"], ["살람바 사르방가아사나", "Salamba Sarvangasana"]],
+    matchers: ["longus colli", "longus cervicis"],
+  },
+  {
+    id: "longus_capitis", ko: "머리긴근", la: "Longus capitis", group: "목(심부)",
+    func: "머리를 앞으로 굽히는 심부 굴근. 잘란다라 반다에서 목 앞 조절.",
+    asanas: [["잘란다라 반다", "Jalandhara Bandha"], ["살람바 사르방가아사나", "Salamba Sarvangasana"]],
+    matchers: ["longus capitis"],
+  },
+
+  // ── 팔뚝(추가) ───────────────────────────────────────────────────────
+  {
+    id: "brachioradialis", ko: "상완요골근", la: "Brachioradialis", group: "팔뚝",
+    func: "팔꿈치를 굽힌다(중립 회전에서 강함). 팔 균형 자세에서 동원.",
+    asanas: [["바카아사나", "Bakasana"], ["아스타바크라아사나", "Astavakrasana"]],
+    matchers: ["brachioradialis"],
+  },
+  {
+    id: "supinator", ko: "회외근", la: "Supinator", group: "팔뚝",
+    func: "아래팔을 바깥으로 돌린다(회외, 손바닥을 위로).",
+    asanas: [["고무카아사나", "Gomukhasana"], ["바카아사나", "Bakasana"]],
+    matchers: ["supinator"],
+  },
+
+  // ── 후두근 (성문 조절 · 우자이/잘란다라 반다) ─────────────────────────
+  {
+    id: "cricothyroid", ko: "윤상갑상근", la: "Cricothyroid", group: "후두",
+    func: "성대를 늘여 팽팽하게(음 높임) 한다. 우자이 호흡의 성문 소리와 관련.",
+    asanas: [["우자이 프라나야마", "Ujjayi Pranayama"], ["옴 찬팅", "Om Chanting"]],
+    matchers: ["cricothyroid"],
+  },
+  {
+    id: "posterior_cricoarytenoid", ko: "뒤반지피열근", la: "Posterior cricoarytenoid", group: "후두",
+    func: "성대문을 여는 유일한 근육(외전). 흡기 때 기도를 연다.",
+    asanas: [["우자이 프라나야마", "Ujjayi Pranayama"], ["카팔라바티", "Kapalabhati"]],
+    matchers: ["posterior crico arytenoid", "posterior cricoarytenoid"],
+  },
+  {
+    id: "lateral_cricoarytenoid", ko: "가쪽반지피열근", la: "Lateral cricoarytenoid", group: "후두",
+    func: "성대문을 닫는다(내전). 우자이 호흡의 성문 좁힘에 관여.",
+    asanas: [["우자이 프라나야마", "Ujjayi Pranayama"], ["잘란다라 반다", "Jalandhara Bandha"]],
+    matchers: ["lateral crico arytenoid", "lateral cricoarytenoid"],
+  },
+  {
+    // aryepiglottic 은 'oblique arytenoid'를 포함하므로 피열근보다 앞에 둠
+    id: "aryepiglottic", ko: "피열후두개근", la: "Aryepiglotticus", group: "후두",
+    func: "삼킴·발성 시 후두 입구를 좁힌다.",
+    asanas: [["잘란다라 반다", "Jalandhara Bandha"], ["우자이 프라나야마", "Ujjayi Pranayama"]],
+    matchers: ["ary epiglottic", "aryepiglottic"],
+  },
+  {
+    id: "arytenoid", ko: "피열근", la: "Arytenoideus", group: "후두",
+    func: "좌우 피열연골을 모아 성대문 뒤쪽을 닫는다(횡·사피열근).",
+    asanas: [["우자이 프라나야마", "Ujjayi Pranayama"], ["잘란다라 반다", "Jalandhara Bandha"]],
+    matchers: ["transverse arytenoid", "oblique arytenoid"],
+  },
+  {
+    id: "thyroarytenoid", ko: "갑상피열근", la: "Thyroarytenoid", group: "후두",
+    func: "성대를 짧고 두껍게 해 이완시킨다(성대근 포함). 낮은 발성·이완 호흡과 관련.",
+    asanas: [["옴 찬팅", "Om Chanting"], ["브라마리 프라나야마", "Bhramari Pranayama"]],
+    matchers: ["thyro arytenoid", "thyroarytenoid", "vocalis"],
   },
 ];
 
