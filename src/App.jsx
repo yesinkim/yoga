@@ -218,6 +218,30 @@ export default function App() {
   }, []);
   const [peelMode, setPeelMode] = useState(false);   // 클릭으로 근육 벗기기
   const peelRef = useRef(false);                      // onPick 안정 콜백용
+  const controlsRef = useRef();                       // OrbitControls
+  const [panHeld, setPanHeld] = useState(false);      // Spacebar 이동 모드
+
+  // Spacebar 누르는 동안 좌드래그 = 위치 이동(pan), 떼면 회전으로 복귀
+  useEffect(() => {
+    const setLeft = (mode) => {
+      const c = controlsRef.current;
+      if (c && c.mouseButtons) c.mouseButtons.LEFT = mode;
+    };
+    const down = (e) => {
+      if (e.code === "Space" && !e.repeat &&
+          !(e.target instanceof HTMLElement && e.target.matches("input,textarea,select"))) {
+        e.preventDefault();
+        setPanHeld(true);
+        setLeft(THREE.MOUSE.PAN);
+      }
+    };
+    const up = (e) => {
+      if (e.code === "Space") { setPanHeld(false); setLeft(THREE.MOUSE.ROTATE); }
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, []);
   const hiddenRef = useRef(new Set());                // 벗겨진(숨긴) 메시들
   const [hiddenCount, setHiddenCount] = useState(0);  // 재렌더 + 복원 버튼용
 
@@ -284,7 +308,7 @@ export default function App() {
   const bothMissing = present.muscle === false && present.skeleton === false;
 
   return (
-    <div className="wrap" style={{ cursor: hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
+    <div className="wrap" style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
       <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }} gl={{ alpha: true }}>
         <hemisphereLight args={["#cdd9e6", "#1a1f27", 0.85]} />
         <directionalLight position={[4, 7, 6]} intensity={1.15} />
@@ -292,8 +316,10 @@ export default function App() {
         <Suspense fallback={null}>
           <Scene register={register} onPick={onPick} onHover={setHovering} present={markAbsent} ready={ready} />
         </Suspense>
-        <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
+        <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
       </Canvas>
+
+      {panHeld && <div className="pan-hint">✥ 이동 모드 — 드래그로 위치 이동</div>}
 
       <div className="masthead">
         <span className="plate">Atlas of Movement</span>
