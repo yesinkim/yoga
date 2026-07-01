@@ -119,15 +119,19 @@ export const MUSCLES = [
     matchers: ["rectus abdominis", "rectus_abdominis"],
   },
   {
-    id: "obliques", ko: "복사근", la: "Obliquus ext./int.", group: "코어",
-    func: "몸통을 비틀고 옆으로 굽힌다. 복압을 만들어 허리를 보호.",
+    id: "external_oblique", ko: "외복사근", la: "Obliquus externus abdominis", group: "코어",
+    func: "복부 측면의 표층. 몸통을 반대쪽으로 비틀고 같은 쪽으로 옆굽힘. 복압을 만든다.",
     asanas: [["파리브르타 트리코나아사나", "Parivrtta Trikonasana"], ["바시스타아사나", "Vasisthasana"]],
     matchers: [
-      // Z-Anatomy 실제 이름: "External/Internal abdominal oblique muscle"
-      "external abdominal oblique", "internal abdominal oblique",
-      "obliquus externus abdominis", "obliquus internus abdominis",
-      // 다른 export 변형 대비 (눈·목의 oblique과 섞이지 않게 abdominal 포함형만)
-      "abdominal external oblique", "abdominal internal oblique",
+      "external abdominal oblique", "obliquus externus abdominis", "abdominal external oblique",
+    ],
+  },
+  {
+    id: "internal_oblique", ko: "내복사근", la: "Obliquus internus abdominis", group: "코어(심부)",
+    func: "외복사근 아래층. 몸통을 같은 쪽으로 비틀고 옆굽힘. 복압으로 허리를 보호한다.",
+    asanas: [["파리브르타 파르스바코나아사나", "Parivrtta Parsvakonasana"], ["바시스타아사나", "Vasisthasana"]],
+    matchers: [
+      "internal abdominal oblique", "obliquus internus abdominis", "abdominal internal oblique",
     ],
   },
   {
@@ -267,7 +271,8 @@ export const BREATHING_IDS = [
   "scalene",              // 사각근 (보조 흡기)
   "sternocleidomastoid",  // 흉쇄유돌근 (보조 흡기)
   "transversus",          // 복횡근 (강제 호기)
-  "obliques",             // 복사근 (강제 호기)
+  "external_oblique",     // 외복사근 (강제 호기)
+  "internal_oblique",     // 내복사근 (강제 호기)
   "rectus_abdominis",     // 복직근 (강제 호기)
 ];
 
