@@ -37,6 +37,25 @@ const LAYER_FILES = {
   skeleton: "/models/skeleton.glb", // 필수
 };
 
+// 레이어 표시/숨김 눈 아이콘
+function Eye({ open }) {
+  return (
+    <svg className="eye" viewBox="0 0 20 14" width="18" height="14" aria-hidden="true">
+      {open ? (
+        <>
+          <path d="M1 7s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="10" cy="7" r="2.4" fill="currentColor" />
+        </>
+      ) : (
+        <>
+          <path d="M1 7s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z" fill="none" stroke="currentColor" strokeWidth="1.3" opacity=".55" />
+          <path d="M3 12 17 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 // ── 레이어 하나를 로드하는 컴포넌트 (없는 파일이면 조용히 패스) ──────────────
 class LayerBoundary extends React.Component {
   constructor(p) { super(p); this.state = { failed: false }; }
@@ -386,29 +405,33 @@ export default function App() {
         <div className="layers">
           {[["surface", "피부", "#d9a88c", surfaceOn, setSurfaceOn, present.surface !== false],
             ["fascia", "근막", "#cdd2cb", fasciaOn, setFasciaOn, present.muscle !== false],
-            ["muscle", "근육", "#a8413a", muscleOn, setMuscleOn, present.muscle !== false],
+            ["muscle", "근육", "#c04b3f", muscleOn, setMuscleOn, present.muscle !== false],
             ["skeleton", "뼈", "#ece3cf", boneOn, setBoneOn, present.skeleton !== false]]
             .filter(([, , , , , show]) => show)
             .map(([k, t, c, on, set]) => (
-              <label key={k} className={"layer-check" + (on ? " on" : "")}>
-                <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} />
-                <span className="dot" style={{ background: c }} />{t}
-              </label>
+              <button key={k} className={"layer" + (on ? " on" : "")} aria-pressed={on}
+                onClick={() => set(!on)} title={`${t} 레이어 ${on ? "숨기기" : "보기"}`}>
+                <span className="lr-dot" style={{ background: c }} />
+                <span className="lr-name">{t}</span>
+                <Eye open={on} />
+              </button>
             ))}
         </div>
-        <button className={"mode-breath" + (focus?.kind === "breath" ? " active" : "")}
-          onClick={toggleBreathing} title="호흡근만 강조 — 횡격막·늑간근·사각근·복부">
-          🫁 호흡근
-        </button>
-        <button className={"mode-peel" + (peelMode ? " active" : "")}
-          onClick={togglePeel} title="켜고 근육을 클릭하면 벗겨내 아래 근육이 보입니다">
-          🔪 벗기기
-        </button>
-        {hiddenCount > 0 && (
-          <button className="restore" onClick={restorePeeled} title="벗긴 근육 모두 되돌리기">
-            ↺ 복원 {hiddenCount}
+        <div className="tools">
+          <button className={"tool" + (focus?.kind === "breath" ? " on" : "")}
+            onClick={toggleBreathing} title="호흡근만 강조 — 횡격막·늑간근·사각근·복부">
+            <span className="t-ico">🫁</span><span className="t-name">호흡근</span>
           </button>
-        )}
+          <button className={"tool" + (peelMode ? " on peel" : "")}
+            onClick={togglePeel} title="켜고 근육을 클릭하면 벗겨내 아래 근육이 보입니다">
+            <span className="t-ico">🔪</span><span className="t-name">벗기기</span>
+          </button>
+          {hiddenCount > 0 && (
+            <button className="tool restore" onClick={restorePeeled} title="벗긴 근육 모두 되돌리기">
+              <span className="t-ico">↺</span><span className="t-name">복원 {hiddenCount}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <footer className="attribution">
