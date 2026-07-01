@@ -59,6 +59,12 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
         o.raycast = () => {};
         return;
       }
+      // 뼈 레이어엔 근육·근막·힘줄·인대가 섞여 몸을 감싼다 → 숨겨 실제 뼈만 남김 (연골은 유지)
+      if (layerKey === "skeleton" && (/muscle|bursa/i.test(o.name) || isConnectiveTissue(o.name))) {
+        o.visible = false;
+        o.raycast = () => {};
+        return;
+      }
       o.material = o.material.clone();
       o.material.transparent = true;
       o.material.depthWrite = true;
