@@ -143,41 +143,38 @@ function Scene({ register, onPick, onHover, present, ready }) {
   );
 }
 
-// ── 깊이 슬라이더 + 하이라이트 → 레이어별 불투명도 ───────────────────────────
-// focusIds(Set)가 있으면 그 근육들만 강조하고 나머지 근육은 디밍(역방향/호흡근 모드).
-// 없으면 selectedId 하나만 강조(클릭 단일 선택).
-function applyDepth(layers, depth, selectedId, focusIds, hidden) {
-  const order = LAYER_ORDER.filter((k) => layers[k]);
-  const L = order.length;
-  if (L === 0) return;
-  const pos = depth * (L - 1);
+// ── 레이어 체크박스(피부/근육/뼈) + 하이라이트 → 불투명도 ────────────────────
+// vis = {surface, muscle, skeleton} 각 레이어 표시 여부.
+// 겹칠 때 바깥 레이어는 반투명하게 해서 안쪽이 비쳐 보이게 한다.
+// focusIds(Set)가 있으면 그 근육들만 강조, selectedId 하나면 단일 강조.
+function applyView(layers, vis, selectedId, focusIds, hidden) {
   const focusing = focusIds && focusIds.size > 0;
+  const deeperThanSurface = vis.muscle || vis.skeleton;
 
-  order.forEach((key, i) => {
-    const isLast = i === L - 1;
-    const reveal = clamp(pos - (i - 1), 0, 1);
-    const peel = isLast ? 0 : clamp(pos - i, 0, 1);
-    let base = reveal * (1 - peel);
-    if (key === "surface") base *= 0.55;
+  for (const key of LAYER_ORDER) {
+    const layer = layers[key];
+    if (!layer) continue;
+    let base = vis[key] ? 1 : 0;
+    if (key === "surface" && vis.surface && deeperThanSurface) base = 0.35; // 피부는 반투명
+    if (key === "muscle" && vis.muscle && vis.skeleton) base = 0.55;        // 근육+뼈 → x-ray
 
-    layers[key].meshes.forEach((m) => {
-      // 개별 벗기기로 숨긴 메시는 깊이와 무관하게 감추고, 클릭도 통과시킴
-      if (hidden && hidden.has(m)) {
-        m.material.opacity = 0;
-        m.visible = false;
-        m.material.depthWrite = false;
-        m.raycast = NOOP_RAYCAST;   // 안쪽 근육이 클릭되도록
+    layer.meshes.forEach((m) => {
+      if (key === "muscle" && hidden && hidden.has(m)) { // 개별 벗기기
+        m.material.opacity = 0; m.visible = false; m.material.depthWrite = false;
+        m.raycast = NOOP_RAYCAST;
         return;
       }
-      m.raycast = MESH_RAYCAST;     // 벗기지 않은(복원된) 메시는 다시 클릭 가능
-      const id = m.userData.muscleId;
+      if (key === "muscle") m.raycast = MESH_RAYCAST;
       let op = base;
       let hl = false;
-      if (key === "muscle" && focusing) {
-        if (id && focusIds.has(id)) { op = Math.max(base, 0.95); hl = true; } // 강조: 깊이와 무관하게 보이게
-        else { op = base * 0.07; }                                            // 나머지 근육은 거의 투명
-      } else if (key === "muscle" && selectedId && id === selectedId) {
-        op = Math.max(base, 0.92); hl = true;
+      if (key === "muscle") {
+        const id = m.userData.muscleId;
+        if (focusing) {
+          if (id && focusIds.has(id)) { op = Math.max(base, 0.95); hl = true; }
+          else { op = base * 0.07; }
+        } else if (selectedId && id === selectedId) {
+          op = Math.max(base, 0.92); hl = true;
+        }
       }
       m.material.opacity = op;
       m.visible = op > 0.02;
@@ -192,16 +189,17 @@ function applyDepth(layers, depth, selectedId, focusIds, hidden) {
         }
       }
     });
-  });
+  }
 }
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // ── 메인 ────────────────────────────────────────────────────────────────────
 export default function App() {
   const layersRef = useRef({});           // key -> {scene, meshes}
   const [present, setPresent] = useState({ surface: true, muscle: true, skeleton: true });
   const [ready, setReady] = useState(0);  // 레이어 등록될 때마다 +1
-  const [depth, setDepth] = useState(0);  // 0..1
+  const [surfaceOn, setSurfaceOn] = useState(false); // 피부 표시
+  const [muscleOn, setMuscleOn] = useState(true);    // 근육 표시
+  const [boneOn, setBoneOn] = useState(false);       // 뼈 표시
   const [selected, setSelected] = useState(null); // muscle obj | {raw} | null
   const [focus, setFocus] = useState(null); // { kind, title, sub, ids:Set, list:[muscle] } | null
   const [hovering, setHovering] = useState(false);
@@ -269,7 +267,7 @@ export default function App() {
     setPeelMode((p) => {
       const next = !p;
       peelRef.current = next;
-      if (next) { setSelected(null); setDepth(0); } // 근육 전체 불투명하게
+      if (next) { setSelected(null); setMuscleOn(true); setBoneOn(false); } // 근육 전체 불투명하게
       return next;
     });
   }, []);
@@ -294,13 +292,14 @@ export default function App() {
         .sort((a, b) => BREATHING_IDS.indexOf(a.id) - BREATHING_IDS.indexOf(b.id));
       return { kind: "breath", title: "호흡근", sub: "", ids: new Set(BREATHING_IDS), list };
     });
-    setDepth((d) => (d > 0.5 ? 0.5 : d)); // 뼈까지 내려가 있으면 근육층으로 끌어올림
+    setMuscleOn(true); // 근육이 보이도록
   }, []);
 
-  // depth / selected / focus / 벗기기 / 레이어 변동 시 머티리얼 갱신
+  // 레이어 토글 / selected / focus / 벗기기 / 레이어 변동 시 머티리얼 갱신
   useEffect(() => {
-    applyDepth(layersRef.current, depth, selected?.id, focus?.ids, hiddenRef.current);
-  }, [depth, selected, focus, hiddenCount, ready]);
+    applyView(layersRef.current, { surface: surfaceOn, muscle: muscleOn, skeleton: boneOn },
+      selected?.id, focus?.ids, hiddenRef.current);
+  }, [surfaceOn, muscleOn, boneOn, selected, focus, hiddenCount, ready]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
@@ -350,22 +349,18 @@ export default function App() {
       {bothMissing && <EmptyState present={present} />}
 
       <div className="console">
-        <span className="lab">표층</span>
-        <div className="depthwrap">
-          <input
-            className="depth" type="range" min={0} max={1000} value={Math.round(depth * 1000)}
-            onChange={(e) => setDepth(+e.target.value / 1000)}
-            aria-label="깊이 — 피부에서 뼈까지"
-          />
-        </div>
-        <span className="lab">심층</span>
-        <div className="chips">
-          {[["피부", 0, "#d9a88c"], ["근육", 0.5, "#a8413a"], ["뼈", 1, "#ece3cf"]].map(([t, d, c]) => (
-            <button key={t} className={"chip" + (Math.abs(d - depth) < 0.18 ? " active" : "")}
-              onClick={() => setDepth(d)}>
-              <span className="dot" style={{ background: c }} />{t}
-            </button>
-          ))}
+        <span className="lab">레이어</span>
+        <div className="layers">
+          {[["surface", "피부", "#d9a88c", surfaceOn, setSurfaceOn],
+            ["muscle", "근육", "#a8413a", muscleOn, setMuscleOn],
+            ["skeleton", "뼈", "#ece3cf", boneOn, setBoneOn]]
+            .filter(([k]) => present[k] !== false)
+            .map(([k, t, c, on, set]) => (
+              <label key={k} className={"layer-check" + (on ? " on" : "")}>
+                <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} />
+                <span className="dot" style={{ background: c }} />{t}
+              </label>
+            ))}
         </div>
         <button className={"mode-breath" + (focus?.kind === "breath" ? " active" : "")}
           onClick={toggleBreathing} title="호흡근만 강조 — 횡격막·늑간근·사각근·복부">
@@ -399,15 +394,17 @@ export default function App() {
               <h2>{selected.ko}</h2>
               <span className="group">{selected.group}</span>
               <div className="sec"><div className="h">기능</div><p>{selected.func}</p></div>
-              <div className="sec">
-                <div className="h">관련 아사나 <em className="hint-tap">탭하면 동원 근육 강조</em></div>
-                <div className="asanas">
-                  {selected.asanas.map(([ko, sa]) => (
-                    <button className="asana" key={sa} onClick={() => focusAsana(ko, sa)}
-                      title={`${ko}에 동원되는 근육 강조`}>{ko}<i>{sa}</i></button>
-                  ))}
+              {selected.asanas?.length > 0 && (
+                <div className="sec">
+                  <div className="h">관련 아사나 <em className="hint-tap">탭하면 동원 근육 강조</em></div>
+                  <div className="asanas">
+                    {selected.asanas.map(([ko, sa]) => (
+                      <button className="asana" key={sa} onClick={() => focusAsana(ko, sa)}
+                        title={`${ko}에 동원되는 근육 강조`}>{ko}<i>{sa}</i></button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </>
           ) : (
             <>

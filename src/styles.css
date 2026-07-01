@@ -40,6 +40,16 @@ canvas{touch-action:none;}
 .chip.active{background:var(--jade);border-color:var(--jade);color:#0e1b14;font-weight:700;}
 .chip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle;}
 
+/* ── 레이어 체크박스 (피부/근육/뼈) ─────────────────────────────────────── */
+.layers{display:flex;flex-direction:column;gap:7px;width:100%;padding:0 12px;}
+.layer-check{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:#c2cbd2;
+  cursor:pointer;border:1px solid var(--glass-line);background:rgba(255,255,255,.03);border-radius:10px;
+  padding:8px 9px;transition:all .15s ease;user-select:none;}
+.layer-check:hover{background:rgba(255,255,255,.07);}
+.layer-check.on{background:rgba(93,138,114,.16);border-color:rgba(93,138,114,.45);color:#eaf3ee;}
+.layer-check input{accent-color:var(--jade);width:15px;height:15px;cursor:pointer;margin:0;}
+.layer-check .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+
 .card{position:absolute;z-index:8;right:20px;top:50%;transform:translateY(-50%);
   width:330px;max-width:calc(100vw - 40px);color:var(--ink);
   background:linear-gradient(180deg,#f7f0e1,#efe5cf);border:1px solid var(--parchment-edge);
@@ -219,6 +229,8 @@ canvas{touch-action:none;}
   .depth{transform:none;width:100%;height:8px;cursor:ew-resize;}
   .console .lab{display:none;}
   .chips{flex-direction:row;padding:0;gap:8px;}
+  .layers{flex-direction:row;padding:0;gap:8px;}
+  .layer-check{flex:1;justify-content:center;}
   .chip{flex:1;text-align:center;}
   .card{right:12px;left:12px;top:auto;bottom:170px;transform:none;width:auto;max-height:46vh;overflow:auto;}
   .masthead{left:14px;right:14px;}

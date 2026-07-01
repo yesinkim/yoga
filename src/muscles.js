@@ -576,6 +576,125 @@ export const MUSCLES = [
     asanas: [["옴 찬팅", "Om Chanting"], ["브라마리 프라나야마", "Bhramari Pranayama"]],
     matchers: ["thyro arytenoid", "thyroarytenoid", "vocalis"],
   },
+
+  // ── 나머지 전량 매핑 (요가 직접 관련은 낮지만 클릭 시 이름이 뜨도록) ─────
+  // 표정근
+  { id: "frontalis", ko: "이마근", la: "Frontalis", group: "표정근", func: "이마를 올리고 눈썹을 치켜올린다.", asanas: [], matchers: ["frontalis"] },
+  { id: "occipitalis", ko: "뒤통수근", la: "Occipitalis", group: "표정근", func: "두피를 뒤로 당긴다.", asanas: [], matchers: ["occipitalis"] },
+  { id: "temporoparietalis", ko: "관자마루근", la: "Temporoparietalis", group: "표정근", func: "귀 위 두피를 긴장시킨다.", asanas: [], matchers: ["temporoparietalis"] },
+  { id: "corrugator", ko: "눈썹주름근", la: "Corrugator supercilii", group: "표정근", func: "눈썹을 안쪽 아래로 당겨 이마에 주름을 만든다.", asanas: [], matchers: ["corrugator"] },
+  { id: "procerus", ko: "눈살근", la: "Procerus", group: "표정근", func: "미간에 가로 주름을 만든다.", asanas: [], matchers: ["procerus"] },
+  { id: "nasalis", ko: "코근", la: "Nasalis", group: "표정근", func: "콧구멍을 넓히고 좁힌다.", asanas: [], matchers: ["nasalis"] },
+  { id: "depressor_septi", ko: "코중격내림근", la: "Depressor septi nasi", group: "표정근", func: "코중격을 아래로 당긴다.", asanas: [], matchers: ["depressor septi"] },
+  { id: "orbicularis_oculi", ko: "눈둘레근", la: "Orbicularis oculi", group: "표정근", func: "눈을 감는다.", asanas: [], matchers: ["orbicularis oculi"] },
+  { id: "orbicularis_oris", ko: "입둘레근", la: "Orbicularis oris", group: "표정근", func: "입을 다물고 오므린다.", asanas: [], matchers: ["orbicularis oris"] },
+  { id: "levator_palpebrae", ko: "위눈꺼풀올림근", la: "Levator palpebrae superioris", group: "눈", func: "윗눈꺼풀을 들어 올린다.", asanas: [], matchers: ["levator palpebrae"] },
+  { id: "levator_labii", ko: "위입술올림근", la: "Levator labii superioris", group: "표정근", func: "윗입술을 올린다.", asanas: [], matchers: ["levator labii"] },
+  { id: "levator_nasolabialis", ko: "위입술콧방울올림근", la: "Levator labii sup. alaeque nasi", group: "표정근", func: "윗입술과 콧방울을 올린다.", asanas: [], matchers: ["levator nasolabialis", "alaeque"] },
+  { id: "levator_anguli_oris", ko: "입꼬리올림근", la: "Levator anguli oris", group: "표정근", func: "입꼬리를 올린다.", asanas: [], matchers: ["levator anguli oris"] },
+  { id: "zygomaticus_major", ko: "큰광대근", la: "Zygomaticus major", group: "표정근", func: "입꼬리를 위·바깥으로(미소).", asanas: [], matchers: ["zygomaticus major"] },
+  { id: "zygomaticus_minor", ko: "작은광대근", la: "Zygomaticus minor", group: "표정근", func: "윗입술을 올린다.", asanas: [], matchers: ["zygomaticus minor"] },
+  { id: "risorius", ko: "입꼬리당김근", la: "Risorius", group: "표정근", func: "입꼬리를 옆으로 당긴다.", asanas: [], matchers: ["risorius"] },
+  { id: "depressor_anguli_oris", ko: "입꼬리내림근", la: "Depressor anguli oris", group: "표정근", func: "입꼬리를 내린다.", asanas: [], matchers: ["depressor anguli oris"] },
+  { id: "depressor_labii", ko: "아랫입술내림근", la: "Depressor labii inferioris", group: "표정근", func: "아랫입술을 내린다.", asanas: [], matchers: ["depressor labii"] },
+  { id: "mentalis", ko: "턱끝근", la: "Mentalis", group: "표정근", func: "턱끝 피부를 올리고 아랫입술을 내민다.", asanas: [], matchers: ["mentalis"] },
+  { id: "buccinator", ko: "볼근", la: "Buccinator", group: "표정근", func: "볼을 치아에 밀착시킨다(불기·씹기).", asanas: [], matchers: ["bucinator", "buccinator"] },
+
+  // 눈 바깥근육 (superior/inferior oblique는 후두하 obliquus capitis와 어순이 달라 안 겹침)
+  { id: "rectus_sup_eye", ko: "위곧은근", la: "Superior rectus", group: "눈", func: "눈을 위로 돌린다.", asanas: [], matchers: ["superior rectus"] },
+  { id: "rectus_inf_eye", ko: "아래곧은근", la: "Inferior rectus", group: "눈", func: "눈을 아래로 돌린다.", asanas: [], matchers: ["inferior rectus"] },
+  { id: "rectus_med_eye", ko: "안쪽곧은근", la: "Medial rectus", group: "눈", func: "눈을 안쪽으로 돌린다.", asanas: [], matchers: ["medial rectus"] },
+  { id: "rectus_lat_eye", ko: "가쪽곧은근", la: "Lateral rectus", group: "눈", func: "눈을 바깥으로 돌린다.", asanas: [], matchers: ["lateral rectus"] },
+  { id: "oblique_sup_eye", ko: "위빗근(눈)", la: "Superior oblique", group: "눈", func: "눈을 아래·바깥으로 돌린다.", asanas: [], matchers: ["superior oblique"] },
+  { id: "oblique_inf_eye", ko: "아래빗근(눈)", la: "Inferior oblique", group: "눈", func: "눈을 위·바깥으로 돌린다.", asanas: [], matchers: ["inferior oblique"] },
+
+  // 씹기근
+  { id: "masseter", ko: "깨물근", la: "Masseter", group: "씹기근", func: "아래턱을 올려 강하게 씹는다. 턱관절 긴장·이갈이와 관련.", asanas: [["싱하아사나", "Simhasana"]], matchers: ["masseter"] },
+  { id: "temporalis", ko: "관자근", la: "Temporalis", group: "씹기근", func: "아래턱을 올리고 뒤로 당긴다.", asanas: [["싱하아사나", "Simhasana"]], matchers: ["temporalis"] },
+  { id: "lateral_pterygoid", ko: "가쪽날개근", la: "Lateral pterygoid", group: "씹기근", func: "턱을 앞으로 내밀고 좌우로 움직인다.", asanas: [], matchers: ["lateral pterygoid"] },
+  { id: "medial_pterygoid", ko: "안쪽날개근", la: "Medial pterygoid", group: "씹기근", func: "아래턱을 올린다(깨물근 보조).", asanas: [], matchers: ["medial pterygoid"] },
+
+  // 후두하근 (머리 미세 균형 — 헤드스탠드·자세)
+  { id: "rcp_major", ko: "큰뒤머리곧은근", la: "Rectus capitis posterior major", group: "후두하근", func: "머리를 뒤로 젖히고 같은 쪽으로 돌린다.", asanas: [["시르사아사나", "Sirsasana"]], matchers: ["rectus posterior major capitis", "rectus capitis posterior major"] },
+  { id: "rcp_minor", ko: "작은뒤머리곧은근", la: "Rectus capitis posterior minor", group: "후두하근", func: "머리를 뒤로 젖힌다. 경막과 연결된 심부 안정근.", asanas: [["시르사아사나", "Sirsasana"]], matchers: ["rectus posterior minor capitis", "rectus capitis posterior minor"] },
+  { id: "rca", ko: "앞머리곧은근", la: "Rectus capitis anterior", group: "후두하근", func: "머리를 앞으로 굽히는 심부근.", asanas: [], matchers: ["rectus anterior capitis"] },
+  { id: "rcl", ko: "가쪽머리곧은근", la: "Rectus capitis lateralis", group: "후두하근", func: "머리를 옆으로 굽힌다.", asanas: [], matchers: ["rectus lateralis capitis"] },
+  { id: "oca_sup", ko: "위머리빗근", la: "Obliquus capitis superior", group: "후두하근", func: "머리를 뒤로 젖히고 옆으로 굽힌다.", asanas: [["시르사아사나", "Sirsasana"]], matchers: ["obliquus superior capitis"] },
+  { id: "oca_inf", ko: "아래머리빗근", la: "Obliquus capitis inferior", group: "후두하근", func: "고리뼈(C1)를 돌려 머리를 회전시킨다.", asanas: [], matchers: ["obliquus inferior capitis"] },
+
+  // 설골근 (목 앞)
+  { id: "omohyoid", ko: "어깨목뿔근", la: "Omohyoid", group: "설골근", func: "목뿔뼈를 내린다.", asanas: [], matchers: ["omohyoid"] },
+  { id: "sternohyoid", ko: "복장목뿔근", la: "Sternohyoid", group: "설골근", func: "목뿔뼈를 내린다.", asanas: [], matchers: ["sternohyoid"] },
+  { id: "sternothyroid", ko: "복장방패근", la: "Sternothyroid", group: "설골근", func: "방패연골을 내린다.", asanas: [], matchers: ["sternothyroid"] },
+  { id: "thyrohyoid", ko: "방패목뿔근", la: "Thyrohyoid", group: "설골근", func: "목뿔뼈와 방패연골을 가까이 당긴다.", asanas: [], matchers: ["thyrohyoid"] },
+  { id: "mylohyoid", ko: "턱목뿔근", la: "Mylohyoid", group: "설골근", func: "입바닥을 이루고 목뿔뼈를 올린다.", asanas: [], matchers: ["mylohyoid"] },
+  { id: "geniohyoid", ko: "턱끝목뿔근", la: "Geniohyoid", group: "설골근", func: "목뿔뼈를 앞·위로 당긴다.", asanas: [], matchers: ["geniohyoid"] },
+  { id: "stylohyoid", ko: "붓목뿔근", la: "Stylohyoid", group: "설골근", func: "목뿔뼈를 위·뒤로 당긴다.", asanas: [], matchers: ["stylohyoid"] },
+  { id: "digastric", ko: "두힘살근", la: "Digastric", group: "설골근", func: "입을 벌리고 목뿔뼈를 올린다.", asanas: [], matchers: ["digastric"] },
+
+  // 혀·인두
+  { id: "genioglossus", ko: "턱끝혀근", la: "Genioglossus", group: "혀근", func: "혀를 내밀고 아래로 누른다.", asanas: [["케차리 무드라", "Khechari Mudra"]], matchers: ["genioglossus"] },
+  { id: "hyoglossus", ko: "목뿔혀근", la: "Hyoglossus", group: "혀근", func: "혀를 아래로 당긴다.", asanas: [], matchers: ["hyoglossus"] },
+  { id: "pharyngeal_sup", ko: "위인두수축근", la: "Superior pharyngeal constrictor", group: "인두근", func: "인두를 좁혀 삼킴을 돕는다.", asanas: [], matchers: ["superior pharyngeal constrictor"] },
+  { id: "pharyngeal_mid", ko: "중간인두수축근", la: "Middle pharyngeal constrictor", group: "인두근", func: "인두를 좁힌다.", asanas: [], matchers: ["middle pharyngeal constrictor"] },
+  { id: "pharyngeal_inf", ko: "아래인두수축근", la: "Inferior pharyngeal constrictor", group: "인두근", func: "인두를 좁힌다.", asanas: [], matchers: ["inferior pharyngeal constrictor"] },
+  { id: "palatopharyngeus", ko: "입천장인두근", la: "Palatopharyngeus", group: "인두근", func: "인두와 물렁입천장을 올린다.", asanas: [], matchers: ["palatopharyngeus"] },
+  { id: "stylopharyngeus", ko: "붓인두근", la: "Stylopharyngeus", group: "인두근", func: "인두를 올리고 넓힌다.", asanas: [], matchers: ["stylopharyngeus"] },
+
+  // 팔뚝 폄근·기타 팔
+  { id: "anconeus", ko: "주근", la: "Anconeus", group: "팔뚝(폄근)", func: "팔꿈치 폄을 보조하고 관절주머니를 안정시킨다.", asanas: [["차투랑가 단다아사나", "Chaturanga Dandasana"]], matchers: ["anconeus"] },
+  { id: "ecr_longus", ko: "긴노쪽손목폄근", la: "Extensor carpi radialis longus", group: "팔뚝(폄근)", func: "손목을 펴고 노쪽으로 치우친다.", asanas: [["아도 무카 브륵샤아사나", "Adho Mukha Vrksasana"]], matchers: ["extensor carpi radialis longus"] },
+  { id: "ecr_brevis", ko: "짧은노쪽손목폄근", la: "Extensor carpi radialis brevis", group: "팔뚝(폄근)", func: "손목을 편다.", asanas: [], matchers: ["extensor carpi radialis brevis"] },
+  { id: "ecu", ko: "자쪽손목폄근", la: "Extensor carpi ulnaris", group: "팔뚝(폄근)", func: "손목을 펴고 자쪽으로 치우친다.", asanas: [], matchers: ["extensor carpi ulnaris"] },
+  { id: "extensor_digiti_minimi", ko: "새끼폄근", la: "Extensor digiti minimi", group: "팔뚝(폄근)", func: "새끼손가락을 편다.", asanas: [], matchers: ["extensor digiti minimi"] },
+  { id: "extensor_indicis", ko: "집게폄근", la: "Extensor indicis", group: "팔뚝(폄근)", func: "집게손가락을 편다.", asanas: [], matchers: ["extensor indicis"] },
+  { id: "epl", ko: "긴엄지폄근", la: "Extensor pollicis longus", group: "팔뚝(폄근)", func: "엄지 끝마디를 편다.", asanas: [], matchers: ["extensor pollicis longus"] },
+  { id: "epb", ko: "짧은엄지폄근", la: "Extensor pollicis brevis", group: "팔뚝(폄근)", func: "엄지 첫마디를 편다.", asanas: [], matchers: ["extensor pollicis brevis"] },
+  { id: "apl", ko: "긴엄지벌림근", la: "Abductor pollicis longus", group: "팔뚝(폄근)", func: "엄지를 벌린다.", asanas: [], matchers: ["abductor pollicis longus"] },
+
+  // 손 내재근
+  { id: "apb", ko: "짧은엄지벌림근", la: "Abductor pollicis brevis", group: "손 내재근", func: "엄지를 벌린다.", asanas: [], matchers: ["abductor pollicis brevis"] },
+  { id: "fpl", ko: "긴엄지굽힘근", la: "Flexor pollicis longus", group: "손 내재근", func: "엄지 끝마디를 굽힌다.", asanas: [], matchers: ["flexor pollicis longus"] },
+  { id: "fpb", ko: "짧은엄지굽힘근", la: "Flexor pollicis brevis", group: "손 내재근", func: "엄지 첫마디를 굽힌다.", asanas: [], matchers: ["flexor pollicis brevis"] },
+  { id: "opponens_pollicis", ko: "엄지맞섬근", la: "Opponens pollicis", group: "손 내재근", func: "엄지를 손바닥 쪽으로 맞선다.", asanas: [], matchers: ["opponens pollicis"] },
+  { id: "adductor_pollicis", ko: "엄지모음근", la: "Adductor pollicis", group: "손 내재근", func: "엄지를 손바닥 쪽으로 모은다.", asanas: [], matchers: ["adductor pollicis"] },
+  { id: "adm_hand", ko: "새끼벌림근(손)", la: "Abductor digiti minimi", group: "손 내재근", func: "새끼손가락을 벌린다.", asanas: [], matchers: ["abductor digiti minimi of hand"] },
+  { id: "fdm_hand", ko: "새끼굽힘근(손)", la: "Flexor digiti minimi", group: "손 내재근", func: "새끼손가락을 굽힌다.", asanas: [], matchers: ["flexor digiti minimi of hand"] },
+  { id: "odm_hand", ko: "새끼맞섬근(손)", la: "Opponens digiti minimi", group: "손 내재근", func: "새끼손가락을 맞선다.", asanas: [], matchers: ["opponens digiti minimi muscle of hand"] },
+  { id: "palmar_interossei", ko: "바닥쪽뼈사이근", la: "Palmar interossei", group: "손 내재근", func: "손가락을 가운데로 모은다.", asanas: [], matchers: ["palmar interossei"] },
+  { id: "dorsal_interossei_hand", ko: "등쪽뼈사이근(손)", la: "Dorsal interossei (hand)", group: "손 내재근", func: "손가락을 벌린다.", asanas: [], matchers: ["dorsal interossei muscles of hand"] },
+  { id: "lumbrical_hand", ko: "벌레근(손)", la: "Lumbricals (hand)", group: "손 내재근", func: "손허리손가락관절을 굽히고 손가락사이관절을 편다.", asanas: [], matchers: ["lumbrical muscles of hand"] },
+
+  // 발 — longus/brevis(발가락)를 팔뚝 bare보다 앞·구체적으로 매칭
+  { id: "fhl", ko: "긴엄지굽힘근(발)", la: "Flexor hallucis longus", group: "발", func: "엄지발가락을 굽히고 아치를 지지한다. 균형 자세의 핵심.", asanas: [["브륵샤아사나", "Vrksasana"], ["타다아사나", "Tadasana"]], matchers: ["flexor hallucis longus"] },
+  { id: "fhb", ko: "짧은엄지굽힘근(발)", la: "Flexor hallucis brevis", group: "발", func: "엄지발가락 첫마디를 굽힌다.", asanas: [], matchers: ["flexor hallucis brevis"] },
+  { id: "ehl", ko: "긴엄지폄근(발)", la: "Extensor hallucis longus", group: "발/정강이", func: "엄지발가락을 펴고 발목을 든다.", asanas: [["타다아사나", "Tadasana"]], matchers: ["extensor hallucis longus"] },
+  { id: "ehb", ko: "짧은엄지폄근(발)", la: "Extensor hallucis brevis", group: "발", func: "엄지발가락을 편다.", asanas: [], matchers: ["extensor hallucis brevis"] },
+  { id: "abductor_hallucis", ko: "엄지벌림근(발)", la: "Abductor hallucis", group: "발", func: "엄지발가락을 벌리고 아치를 지지한다.", asanas: [["타다아사나", "Tadasana"]], matchers: ["abductor hallucis"] },
+  { id: "adductor_hallucis", ko: "엄지모음근(발)", la: "Adductor hallucis", group: "발", func: "엄지발가락을 모으고 가로아치를 지지한다.", asanas: [], matchers: ["adductor hallucis"] },
+  { id: "fdl_foot", ko: "긴발가락굽힘근", la: "Flexor digitorum longus", group: "발/종아리", func: "발가락을 굽히고 아치를 지지한다.", asanas: [["브륵샤아사나", "Vrksasana"]], matchers: ["flexor digitorum longus"] },
+  { id: "fdb_foot", ko: "짧은발가락굽힘근", la: "Flexor digitorum brevis", group: "발", func: "발가락 중간마디를 굽힌다.", asanas: [], matchers: ["flexor digitorum brevis"] },
+  { id: "edl_foot", ko: "긴발가락폄근", la: "Extensor digitorum longus", group: "발/정강이", func: "발가락을 펴고 발목을 든다.", asanas: [["타다아사나", "Tadasana"]], matchers: ["extensor digitorum longus"] },
+  { id: "edb_foot", ko: "짧은발가락폄근", la: "Extensor digitorum brevis", group: "발", func: "발가락을 편다.", asanas: [], matchers: ["extensor digitorum brevis"] },
+  { id: "extensor_digitorum", ko: "손가락폄근", la: "Extensor digitorum", group: "팔뚝(폄근)", func: "네 손가락을 편다.", asanas: [], matchers: ["extensor digitorum"] },
+  { id: "quadratus_plantae", ko: "발바닥네모근", la: "Quadratus plantae", group: "발", func: "긴발가락굽힘근의 당김 방향을 바로잡는다.", asanas: [], matchers: ["quadratus plantae"] },
+  { id: "adm_foot", ko: "새끼벌림근(발)", la: "Abductor digiti minimi (foot)", group: "발", func: "새끼발가락을 벌리고 가쪽아치를 지지한다.", asanas: [], matchers: ["abductor digiti minimi of foot"] },
+  { id: "fdm_foot", ko: "새끼굽힘근(발)", la: "Flexor digiti minimi (foot)", group: "발", func: "새끼발가락을 굽힌다.", asanas: [], matchers: ["flexor digiti minimi of foot"] },
+  { id: "odm_foot", ko: "새끼맞섬근(발)", la: "Opponens digiti minimi (foot)", group: "발", func: "새끼발가락뼈를 맞선다.", asanas: [], matchers: ["opponens digiti minimi muscle of foot"] },
+  { id: "lumbrical_foot", ko: "벌레근(발)", la: "Lumbricals (foot)", group: "발", func: "발가락 첫마디를 굽힌다.", asanas: [], matchers: ["lumbrical muscles of foot"] },
+  { id: "dorsal_interossei_foot", ko: "등쪽뼈사이근(발)", la: "Dorsal interossei (foot)", group: "발", func: "발가락을 벌린다.", asanas: [], matchers: ["dorsal interossei muscles of foot"] },
+  { id: "plantar_interossei", ko: "바닥쪽뼈사이근(발)", la: "Plantar interossei", group: "발", func: "발가락을 모은다.", asanas: [], matchers: ["plantar interossei"] },
+
+  // 심부 등 짧은근
+  { id: "interspinales", ko: "가시사이근", la: "Interspinales", group: "등(심부)", func: "이웃한 가시돌기를 이어 척추 폄을 돕는다.", asanas: [["살라바아사나", "Salabhasana"]], matchers: ["interspinales"] },
+  { id: "intertransversarii", ko: "가로돌기사이근", la: "Intertransversarii", group: "등(심부)", func: "이웃한 가로돌기를 이어 척추 옆굽힘을 돕는다.", asanas: [], matchers: ["intertransversarii"] },
+  { id: "rotatores", ko: "돌림근", la: "Rotatores", group: "등(심부)", func: "척추 분절을 회전시키고 안정시킨다.", asanas: [["바라드바자아사나", "Bharadvajasana"]], matchers: ["rotatores"] },
+  { id: "levatores_costarum", ko: "갈비올림근", la: "Levatores costarum", group: "등(심부) · 호흡보조", func: "갈비뼈를 올려 흡기를 돕는다.", asanas: [], matchers: ["levatores breves costarum", "levatores longi costarum", "levatores costarum"] },
+
+  // 기타
+  { id: "subclavius", ko: "빗장밑근", la: "Subclavius", group: "가슴", func: "빗장뼈를 내리고 안정시킨다.", asanas: [], matchers: ["subclavius"] },
+  { id: "transversus_thoracis", ko: "가슴가로근", la: "Transversus thoracis", group: "가슴(심부) · 호흡보조", func: "갈비뼈를 내려 호기를 돕는다.", asanas: [], matchers: ["transversus thoracis"] },
+  { id: "external_anal_sphincter", ko: "바깥항문조임근", la: "External anal sphincter", group: "골반저근", func: "항문을 조인다. 물라 반다·아쉬위니 무드라와 관련.", asanas: [["물라 반다", "Mula Bandha"], ["아쉬위니 무드라", "Ashwini Mudra"]], matchers: ["external anal sphincter"] },
 ];
 
 // 호흡근 모드에서 isolate 할 근육 (1차 호흡근 + 보조 흡기근 + 강제 호기 복부근)
