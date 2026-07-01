@@ -21,6 +21,7 @@ const LAYER_TINT = {
   skeleton: "#e8dcc1", // 아이보리 뼈
   surface: "#d8a98c",  // 피부
 };
+const FASCIA_TINT = "#cdd2cb"; // 근막(반투명 진주빛)
 // 메시 이름 기반 미세한 명도 변화 → 단색 덩어리로 안 보이게
 function shade(name) {
   let h = 0;
@@ -49,14 +50,24 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
   const cloned = useMemo(() => {
     const scene = gltf.scene.clone(true);
     const meshes = [];
+    const fasciaMeshes = [];
     const tint = LAYER_TINT[layerKey];
     scene.traverse((o) => {
       if (!o.isMesh) return;
-      // 근육 레이어의 근막·널힘줄·인대는 숨기고 클릭도 막음
-      // (visible=false 만으로는 three가 여전히 raycast 하므로 raycast 자체를 비활성화)
+      // 근육 레이어의 근막·널힘줄·인대는 별도 "근막" 레이어로 (클릭은 통과시켜 근육이 잡히게)
       if (isMuscle && isConnectiveTissue(o.name)) {
+        o.material = o.material.clone();
+        o.material.transparent = true;
+        o.material.depthWrite = false;
+        if (o.material.emissive) { o.material.emissive.set(0x000000); o.material.emissiveIntensity = 0; }
+        if (o.material.color) o.material.color.set(FASCIA_TINT).multiplyScalar(shade(o.name || "f"));
+        o.material.opacity = 0;
         o.visible = false;
         o.raycast = () => {};
+        o.userData.baseColor = o.material.color.clone();
+        o.userData.baseEmissive = new THREE.Color(0x000000);
+        o.userData.muscleId = null;
+        fasciaMeshes.push(o);
         return;
       }
       // 뼈 레이어엔 근육·근막·힘줄·인대가 섞여 몸을 감싼다 → 숨겨 실제 뼈만 남김 (연골은 유지)
@@ -84,11 +95,14 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
       o.userData.muscleId = matched ? matched.id : null;
       meshes.push(o);
     });
-    return { scene, meshes };
+    return { scene, meshes, fasciaMeshes };
   }, [gltf, isMuscle, layerKey]);
 
   useEffect(() => {
     register(layerKey, cloned);
+    if (layerKey === "muscle" && cloned.fasciaMeshes.length) {
+      register("fascia", { meshes: cloned.fasciaMeshes });
+    }
   }, [cloned, layerKey, register]);
 
   const handlers = isMuscle
@@ -178,8 +192,9 @@ function applyView(layers, vis, selectedId, focusIds, hidden) {
         if (focusing) {
           if (id && focusIds.has(id)) { op = Math.max(base, 0.95); hl = true; }
           else { op = base * 0.07; }
-        } else if (selectedId && id === selectedId) {
-          op = Math.max(base, 0.92); hl = true;
+        } else if (selectedId) {
+          if (id === selectedId) { op = Math.max(base, 0.95); hl = true; } // 선택 근육 강조
+          else { op = base * 0.3; }                                        // 나머지는 디밍해 도드라지게
         }
       }
       m.material.opacity = op;
@@ -196,6 +211,17 @@ function applyView(layers, vis, selectedId, focusIds, hidden) {
       }
     });
   }
+
+  // 근막 레이어 (근육 glb에서 분리한 근막·힘줄·널힘줄). 얇은 시트라 반투명.
+  if (layers.fascia) {
+    const others = vis.surface || vis.muscle || vis.skeleton;
+    const fbase = vis.fascia ? (others ? 0.4 : 0.72) : 0;
+    layers.fascia.meshes.forEach((m) => {
+      m.material.opacity = fbase;
+      m.visible = fbase > 0.02;
+      m.material.depthWrite = false;
+    });
+  }
 }
 
 // ── 메인 ────────────────────────────────────────────────────────────────────
@@ -204,6 +230,7 @@ export default function App() {
   const [present, setPresent] = useState({ surface: true, muscle: true, skeleton: true });
   const [ready, setReady] = useState(0);  // 레이어 등록될 때마다 +1
   const [surfaceOn, setSurfaceOn] = useState(false); // 피부 표시
+  const [fasciaOn, setFasciaOn] = useState(false);   // 근막 표시
   const [muscleOn, setMuscleOn] = useState(true);    // 근육 표시
   const [boneOn, setBoneOn] = useState(false);       // 뼈 표시
   const [selected, setSelected] = useState(null); // muscle obj | {raw} | null
@@ -303,9 +330,9 @@ export default function App() {
 
   // 레이어 토글 / selected / focus / 벗기기 / 레이어 변동 시 머티리얼 갱신
   useEffect(() => {
-    applyView(layersRef.current, { surface: surfaceOn, muscle: muscleOn, skeleton: boneOn },
+    applyView(layersRef.current, { surface: surfaceOn, fascia: fasciaOn, muscle: muscleOn, skeleton: boneOn },
       selected?.id, focus?.ids, hiddenRef.current);
-  }, [surfaceOn, muscleOn, boneOn, selected, focus, hiddenCount, ready]);
+  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, hiddenCount, ready]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
@@ -357,10 +384,11 @@ export default function App() {
       <div className="console">
         <span className="lab">레이어</span>
         <div className="layers">
-          {[["surface", "피부", "#d9a88c", surfaceOn, setSurfaceOn],
-            ["muscle", "근육", "#a8413a", muscleOn, setMuscleOn],
-            ["skeleton", "뼈", "#ece3cf", boneOn, setBoneOn]]
-            .filter(([k]) => present[k] !== false)
+          {[["surface", "피부", "#d9a88c", surfaceOn, setSurfaceOn, present.surface !== false],
+            ["fascia", "근막", "#cdd2cb", fasciaOn, setFasciaOn, present.muscle !== false],
+            ["muscle", "근육", "#a8413a", muscleOn, setMuscleOn, present.muscle !== false],
+            ["skeleton", "뼈", "#ece3cf", boneOn, setBoneOn, present.skeleton !== false]]
+            .filter(([, , , , , show]) => show)
             .map(([k, t, c, on, set]) => (
               <label key={k} className={"layer-check" + (on ? " on" : "")}>
                 <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} />
