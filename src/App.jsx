@@ -206,6 +206,16 @@ export default function App() {
   const [focus, setFocus] = useState(null); // { kind, title, sub, ids:Set, list:[muscle] } | null
   const [hovering, setHovering] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false); // 받은 제안 목록 패널
+  // 수정 제안 기능은 기본 숨김. URL ?edit 또는 단축키(Alt+Shift+E)로만 노출.
+  const [editMode, setEditMode] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("edit"));
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.altKey && e.shiftKey && (e.key === "E" || e.key === "e")) setEditMode((v) => !v);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [peelMode, setPeelMode] = useState(false);   // 클릭으로 근육 벗기기
   const peelRef = useRef(false);                      // onPick 안정 콜백용
   const hiddenRef = useRef(new Set());                // 벗겨진(숨긴) 메시들
@@ -378,14 +388,16 @@ export default function App() {
                 해당 근육 <code>matchers</code>에 <b>{selected.raw}</b> 키워드를 추가하면 다음부터 인식됩니다.</p></div>
             </>
           )}
-          <SuggestBox muscle={selected} />
+          {editMode && <SuggestBox muscle={selected} />}
         </aside>
       )}
 
-      <button className="review-btn" onClick={() => setReviewOpen(true)} title="접수된 수정 제안 보기">
-        ✎ 받은 제안
-      </button>
-      {reviewOpen && <SuggestionsPanel onClose={() => setReviewOpen(false)} />}
+      {editMode && (
+        <button className="review-btn" onClick={() => setReviewOpen(true)} title="접수된 수정 제안 보기">
+          ✎ 받은 제안
+        </button>
+      )}
+      {editMode && reviewOpen && <SuggestionsPanel onClose={() => setReviewOpen(false)} />}
     </div>
   );
 }
