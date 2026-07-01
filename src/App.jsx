@@ -4,7 +4,7 @@ import React, {
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS } from "./muscles.js";
+import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
 
@@ -48,18 +48,28 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
     const tint = LAYER_TINT[layerKey];
     scene.traverse((o) => {
       if (!o.isMesh) return;
+      // 근육 레이어의 근막·널힘줄·인대는 숨기고 클릭도 막음
+      // (visible=false 만으로는 three가 여전히 raycast 하므로 raycast 자체를 비활성화)
+      if (isMuscle && isConnectiveTissue(o.name)) {
+        o.visible = false;
+        o.raycast = () => {};
+        return;
+      }
       o.material = o.material.clone();
       o.material.transparent = true;
       o.material.depthWrite = true;
+      // Z-Anatomy 재질엔 흰색 emissive가 구워져 있어 색을 덮어씀 → 끔
+      if (o.material.emissive) {
+        o.material.emissive.set(0x000000);
+        o.material.emissiveIntensity = 0;
+      }
       if (tint && o.material.color) {
         o.material.color.set(tint).multiplyScalar(shade(o.name || layerKey));
         if ("roughness" in o.material) o.material.roughness = 0.72;
         if ("metalness" in o.material) o.material.metalness = 0.0;
       }
       o.userData.baseColor = o.material.color.clone();
-      o.userData.baseEmissive = o.material.emissive
-        ? o.material.emissive.clone()
-        : new THREE.Color(0x000000);
+      o.userData.baseEmissive = new THREE.Color(0x000000);
       const matched = isMuscle ? matchMuscle(o.name) : null;
       o.userData.muscleId = matched ? matched.id : null;
       meshes.push(o);

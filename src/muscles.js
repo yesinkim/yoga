@@ -29,6 +29,12 @@ export const MUSCLES = [
     matchers: ["sternocleidomastoid", "sternocleido", "sternomastoid"],
   },
   {
+    id: "platysma", ko: "광경근", la: "Platysma", group: "목",
+    func: "목 앞면의 얇은 표층근. 아래턱과 입꼬리를 아래로 당기고 목 피부를 긴장시킨다.",
+    asanas: [["싱하아사나", "Simhasana"], ["잘란다라 반다", "Jalandhara Bandha"]],
+    matchers: ["platysma"],
+  },
+  {
     id: "scalene", ko: "사각근", la: "Scaleni", group: "목",
     func: "목을 옆으로 굽히고 1·2번 늑골을 올려 흡기를 돕는 보조 호흡근.",
     asanas: [["마츠야아사나", "Matsyasana"], ["우자이 프라나야마", "Ujjayi Pranayama"]],
@@ -210,7 +216,7 @@ export const MUSCLES = [
     id: "tensor_fasciae", ko: "대퇴근막장근", la: "Tensor fasciae latae", group: "고관절",
     func: "고관절을 굽히고 외전·내회전시킨다. 장경인대를 통해 무릎 안정에도 관여.",
     asanas: [["우타나아사나", "Uttanasana"], ["가루다아사나", "Garudasana"]],
-    matchers: ["tensor fasciae latae", "tensor_fasciae_latae", "tensor fasciae", "iliotibial band", "it band"],
+    matchers: ["tensor fasciae latae", "tensor_fasciae_latae", "tensor fasciae", "iliotibial", "it band"],
   },
 
   // ── 허벅지 ───────────────────────────────────────────────────────────
@@ -268,6 +274,20 @@ export const BREATHING_IDS = [
 // 아사나(산스크리트명) → 그 아사나에 동원되는 근육 목록 (역방향 매핑)
 export function musclesForAsana(sanskrit) {
   return MUSCLES.filter((m) => m.asanas.some(([, sa]) => sa === sanskrit));
+}
+
+// 근막·널힘줄·인대 등 결합조직 메시 판별 (근육을 덮어 가리고, 클릭 시 잘못 잡힘)
+// → 근육 레이어에서 기본으로 숨겨 실제 근육이 보이고 클릭되게 함.
+// 단, 이름에 "muscle"이 있으면 진짜 근육이므로 보존 (예: Tensor fasciae latae muscle).
+const CONNECTIVE_KW = [
+  "fascia", "aponeuros", "retinaculum", "ligament", "septum",
+  "sheath", "membrane", "raphe", "areolar", "bursa", "tendon",
+];
+export function isConnectiveTissue(rawName) {
+  if (!rawName) return false;
+  const n = String(rawName).toLowerCase();
+  if (n.includes("muscle")) return false;
+  return CONNECTIVE_KW.some((k) => n.includes(k));
 }
 
 // 메시 이름 → 근육 항목. 못 찾으면 null.
