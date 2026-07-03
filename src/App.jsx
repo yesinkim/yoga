@@ -523,6 +523,19 @@ export default function App() {
               <h2>{selected.ko}</h2>
               <span className="group">{selected.group}</span>
               <div className="sec"><div className="h">기능</div><p>{selected.func}</p></div>
+              {(selected.origin || selected.insertion) && (
+                <div className="sec">
+                  <div className="h">기시 · 정지</div>
+                  <div className="oi">
+                    {selected.origin && (
+                      <div className="oi-row"><span className="oi-tag oi-o">기시</span><span>{selected.origin}</span></div>
+                    )}
+                    {selected.insertion && (
+                      <div className="oi-row"><span className="oi-tag oi-i">정지</span><span>{selected.insertion}</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
               {selected.asanas?.length > 0 && (
                 <div className="sec">
                   <div className="h">관련 아사나 <em className="hint-tap">탭하면 동원 근육 강조</em></div>

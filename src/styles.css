@@ -92,6 +92,12 @@ canvas{touch-action:none;}
   text-transform:uppercase;color:var(--sepia);margin-bottom:6px;display:flex;align-items:center;gap:8px;}
 .sec .h::after{content:"";flex:1;height:1px;background:rgba(125,107,80,.25);}
 .sec p{margin:0;font-size:14px;line-height:1.6;color:#4a4334;}
+.oi{display:flex;flex-direction:column;gap:7px;}
+.oi-row{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.5;color:#4a4334;}
+.oi-tag{flex:none;margin-top:1px;font-size:10.5px;font-weight:700;letter-spacing:.04em;color:#fff;
+  border-radius:6px;padding:2px 7px;line-height:1.35;}
+.oi-tag.oi-o{background:var(--muscle);}       /* 기시 = 붉은 근육색 */
+.oi-tag.oi-i{background:var(--jade-deep);}    /* 정지 = 정착점 */
 .asanas{display:flex;flex-wrap:wrap;gap:7px;}
 .asana{font-size:12.5px;background:#fff;border:1px solid var(--parchment-edge);color:#5a513f;
   border-radius:9px;padding:6px 10px;line-height:1.25;text-align:left;font-family:inherit;
