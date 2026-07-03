@@ -330,7 +330,10 @@ export default function App() {
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, []);
   const hiddenRef = useRef(new Set());                // 벗겨진(숨긴) 메시들
-  const [hiddenCount, setHiddenCount] = useState(0);  // 재렌더 + 복원 버튼용
+  const peelStackRef = useRef([]);                    // [{ko, meshes}] 벗기기 이력(되돌리기용)
+  const [peelCount, setPeelCount] = useState(0);      // 벗긴 근육 수(재렌더/버튼용)
+  const [lastPeel, setLastPeel] = useState(null);     // {ko} 최근 벗김 알림(토스트)
+  const peelToastTimer = useRef();
 
   const register = useCallback((key, payload) => {
     layersRef.current[key] = payload;
@@ -352,11 +355,37 @@ export default function App() {
     setPeelHover(peelRef.current && obj ? obj : null);
   }, []);
 
-  const peelOff = useCallback((obj) => {           // 근육 한 겹 벗기기(페이드 아웃)
-    hiddenRef.current.add(obj);
-    setPeelHover(null);                             // 벗긴 직후 미리보기 해제
-    setHiddenCount((c) => c + 1);
+  // 벗긴 근육 이름 알림(토스트) — 잠시 후 자동 사라짐
+  const flashPeel = useCallback((ko) => {
+    setLastPeel({ ko, at: Date.now() });
+    clearTimeout(peelToastTimer.current);
+    peelToastTimer.current = setTimeout(() => setLastPeel(null), 3600);
   }, []);
+
+  // 벗기기 커밋 — 새로 숨기는 메시만 이력에 쌓고 알림
+  const commitPeel = useCallback((ko, meshes) => {
+    const fresh = meshes.filter((mm) => !hiddenRef.current.has(mm));
+    if (!fresh.length) return;
+    fresh.forEach((mm) => hiddenRef.current.add(mm));
+    peelStackRef.current.push({ ko, meshes: fresh });
+    setPeelCount(peelStackRef.current.length);
+    flashPeel(ko);
+  }, [flashPeel]);
+
+  const peelOff = useCallback((obj) => {           // 클릭한 메시 한 겹 벗기기
+    setPeelHover(null);
+    const m = matchMuscle(obj.name);
+    commitPeel(m ? m.ko : (obj.name || "근육"), [obj]);
+  }, [commitPeel]);
+
+  // 특정 근육 전체(양쪽·여러 메시) 벗기기 — 정보 카드의 '벗기기' 버튼에서 호출
+  const peelMuscle = useCallback((muscle) => {
+    const meshes = (layersRef.current.muscle?.meshes || [])
+      .filter((mm) => mm.userData.muscleId === muscle.id);
+    if (!meshes.length) return;
+    commitPeel(muscle.ko, meshes);
+    setSelected(null);                             // 카드 닫아 아래 층이 보이게
+  }, [commitPeel]);
 
   const onPick = useCallback((obj, e) => {
     // 벗기기 모드이거나 Alt+클릭이면 벗기기, 아니면 정보 선택
@@ -377,17 +406,19 @@ export default function App() {
   }, []);
   // 마지막으로 벗긴 근육 한 겹 되돌리기
   const undoPeel = useCallback(() => {
-    const arr = Array.from(hiddenRef.current);
-    const last = arr[arr.length - 1];
-    if (!last) return;
-    hiddenRef.current.delete(last);
-    setHiddenCount((c) => c - 1);
+    const op = peelStackRef.current.pop();
+    if (!op) return;
+    op.meshes.forEach((mm) => hiddenRef.current.delete(mm));
+    setPeelCount(peelStackRef.current.length);
+    setLastPeel(null);
   }, []);
   // 벗긴 근육 전체 복원
   const restorePeeled = useCallback(() => {
     hiddenRef.current.clear();
+    peelStackRef.current = [];
     setPeelHover(null);
-    setHiddenCount(0);
+    setPeelCount(0);
+    setLastPeel(null);
   }, []);
 
   // 아사나 클릭 → 그 아사나에 동원되는 근육 전체 하이라이트(역방향)
@@ -412,12 +443,16 @@ export default function App() {
   useEffect(() => {
     applyView(layersRef.current, { surface: surfaceOn, fascia: fasciaOn, muscle: muscleOn, skeleton: boneOn },
       selected?.id, focus?.ids, hiddenRef.current, peelHoverRef.current);
-  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, hiddenCount, ready, peelHoverTick]);
+  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, peelCount, ready, peelHoverTick]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
   // 필수 두 레이어가 모두 "없음"으로 확정된 경우에만 안내(그 전엔 로딩 중)
   const bothMissing = present.muscle === false && present.skeleton === false;
+  // 벗기기 모드에서 커서가 올라간 근육 이름(peelHoverTick으로 갱신)
+  const peelHoverName = peelHoverRef.current
+    ? (matchMuscle(peelHoverRef.current.name)?.ko || null) : null;
+  void peelHoverTick;
 
   return (
     <div className="wrap" style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
@@ -435,7 +470,17 @@ export default function App() {
 
       {panHeld && <div className="pan-hint">✥ 이동 모드 — 드래그로 위치 이동</div>}
       {peelMode && !panHeld && (
-        <div className="pan-hint peel-hint">🔪 근육을 클릭해 한 겹씩 벗기기 · 올리면 미리보기</div>
+        <div className="pan-hint peel-hint">
+          {peelHoverName
+            ? <>🔪 <b>{peelHoverName}</b> — 클릭하면 벗겨냅니다</>
+            : <>🔪 근육에 올리면 이름·미리보기 · 클릭하면 벗기기</>}
+        </div>
+      )}
+      {lastPeel && (
+        <div className="peel-toast">
+          <span>🔪 <b>{lastPeel.ko}</b> 벗김</span>
+          <button onClick={undoPeel}>되돌리기</button>
+        </div>
       )}
 
       <div className="masthead">
@@ -492,13 +537,13 @@ export default function App() {
             onClick={togglePeel} title="켜고 근육을 클릭하면 한 겹씩 벗겨내 아래 근육이 보입니다 (Alt+클릭으로 바로 벗기기)">
             <span className="t-ico">🔪</span><span className="t-name">벗기기</span>
           </button>
-          {hiddenCount > 0 && (
+          {peelCount > 0 && (
             <>
               <button className="tool restore" onClick={undoPeel} title="마지막으로 벗긴 근육 한 겹 되돌리기">
                 <span className="t-ico">↶</span><span className="t-name">한 겹</span>
               </button>
               <button className="tool restore" onClick={restorePeeled} title="벗긴 근육 모두 되돌리기">
-                <span className="t-ico">↺</span><span className="t-name">전체 {hiddenCount}</span>
+                <span className="t-ico">↺</span><span className="t-name">전체 {peelCount}</span>
               </button>
             </>
           )}
@@ -522,6 +567,10 @@ export default function App() {
               <p className="la">{selected.la}</p>
               <h2>{selected.ko}</h2>
               <span className="group">{selected.group}</span>
+              <button className="peel-this" onClick={() => peelMuscle(selected)}
+                title={`${selected.ko}을(를) 벗겨내 아래 근육을 봅니다`}>
+                🔪 이 근육 벗겨서 아래 보기
+              </button>
               <div className="sec"><div className="h">기능</div><p>{selected.func}</p></div>
               {(selected.origin || selected.insertion) && (
                 <div className="sec">

@@ -144,6 +144,27 @@ canvas{touch-action:none;}
   font-size:12.5px;font-weight:600;color:#0e1b14;background:var(--jade);border-radius:20px;
   padding:7px 15px;box-shadow:0 6px 20px rgba(0,0,0,.35);letter-spacing:.01em;}
 .pan-hint.peel-hint{background:var(--muscle);color:#fff;}
+.pan-hint.peel-hint b{font-weight:800;}
+
+/* 벗긴 근육 알림 토스트 (하단 중앙) */
+.peel-toast{position:absolute;z-index:9;bottom:22px;left:50%;transform:translateX(-50%);
+  display:flex;align-items:center;gap:12px;font-size:13px;color:#fff;
+  background:rgba(168,65,58,.94);border:1px solid rgba(255,255,255,.18);border-radius:22px;
+  padding:8px 10px 8px 16px;box-shadow:0 8px 26px rgba(0,0,0,.4);backdrop-filter:blur(8px);
+  animation:toastIn .24s ease both;}
+.peel-toast b{font-weight:800;}
+.peel-toast button{font-family:inherit;font-size:12px;font-weight:700;color:var(--muscle);
+  background:#fff;border:none;border-radius:16px;padding:6px 13px;cursor:pointer;white-space:nowrap;}
+.peel-toast button:hover{background:#ffecea;}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px);}
+  to{opacity:1;transform:translateX(-50%) translateY(0);}}
+
+/* 카드 안 '이 근육 벗기기' 버튼 */
+.peel-this{display:block;width:100%;margin:12px 0 2px;font-family:inherit;font-size:13px;font-weight:700;
+  color:#fff;background:var(--muscle);border:none;border-radius:11px;padding:11px;cursor:pointer;
+  box-shadow:0 4px 14px rgba(168,65,58,.28);transition:filter .15s,transform .1s;}
+.peel-this:hover{filter:brightness(1.08);}
+.peel-this:active{transform:translateY(1px);}
 
 .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5;pointer-events:none;}
 .loading-card{display:flex;flex-direction:column;align-items:center;gap:12px;background:var(--glass);
@@ -277,5 +298,6 @@ canvas{touch-action:none;}
   .search-panel{right:12px;top:60px;bottom:auto;}
   .attribution{display:none;}
   .focus-bar{top:58px;width:calc(100vw - 24px);max-height:34vh;overflow:auto;}
+  .peel-toast{bottom:auto;top:56px;}
 }
 :focus-visible{outline:2px solid var(--jade);outline-offset:2px;}
