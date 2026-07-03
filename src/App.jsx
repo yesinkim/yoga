@@ -1,12 +1,13 @@
 import React, {
   Suspense, useCallback, useEffect, useMemo, useRef, useState, memo,
 } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
+const PEEL_GHOST = new THREE.Color("#c86b5a"); // 벗기기 미리보기(호버) 붉은 기
 // three는 visible=false 여도 raycast 하므로, 숨긴 메시는 raycast 자체를 꺼서
 // 클릭이 통과해 안쪽 근육이 잡히게 한다. 복원 시 원래 raycast로 되돌린다.
 const NOOP_RAYCAST = () => {};
@@ -126,9 +127,10 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
 
   const handlers = isMuscle
     ? {
-        onClick: (e) => { e.stopPropagation(); onPick(e.object); },
-        onPointerOver: (e) => { e.stopPropagation(); onHover(true); },
-        onPointerOut: () => onHover(false),
+        onClick: (e) => { e.stopPropagation(); onPick(e.object, e); },
+        onPointerOver: (e) => { e.stopPropagation(); onHover(e.object); },
+        onPointerMove: (e) => { e.stopPropagation(); onHover(e.object); },
+        onPointerOut: () => onHover(null),
       }
     : {};
 
@@ -161,6 +163,27 @@ function Rig({ children, ready }) {
   return <group ref={ref}>{children}</group>;
 }
 
+// 목표 불투명도(userData.tOpacity)로 매 프레임 부드럽게 수렴 → 벗기기·레이어 전환이 페이드로
+function Tween({ layersRef }) {
+  useFrame((_, dt) => {
+    const layers = layersRef.current;
+    const k = 1 - Math.pow(0.0015, Math.min(dt, 0.05)); // 프레임레이트 독립 감쇠
+    for (const key in layers) {
+      const meshes = layers[key]?.meshes;
+      if (!meshes) continue;
+      for (const m of meshes) {
+        const t = m.userData.tOpacity;
+        if (t === undefined) continue;
+        const cur = m.material.opacity;
+        const next = Math.abs(cur - t) < 0.004 ? t : cur + (t - cur) * k;
+        if (next !== cur) m.material.opacity = next;
+        m.visible = next > 0.02 || t > 0.02;
+      }
+    }
+  });
+  return null;
+}
+
 function Scene({ register, onPick, onHover, present, ready }) {
   return (
     <Rig ready={ready}>
@@ -186,7 +209,13 @@ function Scene({ register, onPick, onHover, present, ready }) {
 // vis = {surface, muscle, skeleton} 각 레이어 표시 여부.
 // 겹칠 때 바깥 레이어는 반투명하게 해서 안쪽이 비쳐 보이게 한다.
 // focusIds(Set)가 있으면 그 근육들만 강조, selectedId 하나면 단일 강조.
-function applyView(layers, vis, selectedId, focusIds, hidden) {
+// op을 목표 불투명도(userData.tOpacity)로 기록하면 Tween이 매 프레임 부드럽게 따라간다.
+function setTarget(m, op) {
+  if (m.userData.tOpacity === undefined) m.material.opacity = op; // 첫 적용은 스냅(로드 깜빡임 방지)
+  m.userData.tOpacity = op;
+  m.material.depthWrite = op > 0.6;
+}
+function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
   const focusing = focusIds && focusIds.size > 0;
   const deeperThanSurface = vis.muscle || vis.skeleton;
 
@@ -198,9 +227,14 @@ function applyView(layers, vis, selectedId, focusIds, hidden) {
     if (key === "muscle" && vis.muscle && vis.skeleton) base = 0.55;        // 근육+뼈 → x-ray
 
     layer.meshes.forEach((m) => {
-      if (key === "muscle" && hidden && hidden.has(m)) { // 개별 벗기기
-        m.material.opacity = 0; m.visible = false; m.material.depthWrite = false;
-        m.raycast = NOOP_RAYCAST;
+      if (key === "muscle" && hidden && hidden.has(m)) { // 개별 벗기기 → 페이드 아웃
+        setTarget(m, 0);
+        m.material.depthWrite = false;
+        m.raycast = NOOP_RAYCAST; // 즉시 클릭 통과(뒤 근육 잡히게)
+        if (m.material.emissive) {
+          m.material.emissive.copy(m.userData.baseEmissive);
+          m.material.emissiveIntensity = m.userData.baseEmissive.getHex() ? 1 : 0;
+        }
         return;
       }
       if (key === "muscle") m.raycast = MESH_RAYCAST;
@@ -216,13 +250,17 @@ function applyView(layers, vis, selectedId, focusIds, hidden) {
           else { op = base * 0.3; }                                        // 나머지는 디밍해 도드라지게
         }
       }
-      m.material.opacity = op;
-      m.visible = op > 0.02;
-      m.material.depthWrite = op > 0.6;
+      // 벗기기 모드에서 호버 중인 근육 → 유령처럼 비쳐 아래 층 미리보기
+      const ghost = key === "muscle" && peelHover && m === peelHover;
+      if (ghost) op = Math.min(op, 0.16);
+      setTarget(m, op);
       if (m.material.emissive) {
         if (hl) {
           m.material.emissive.copy(HIGHLIGHT);
           m.material.emissiveIntensity = 0.6;
+        } else if (ghost) {
+          m.material.emissive.copy(PEEL_GHOST);
+          m.material.emissiveIntensity = 0.55;
         } else {
           m.material.emissive.copy(m.userData.baseEmissive);
           m.material.emissiveIntensity = m.userData.baseEmissive.getHex() ? 1 : 0;
@@ -236,8 +274,7 @@ function applyView(layers, vis, selectedId, focusIds, hidden) {
     const others = vis.surface || vis.muscle || vis.skeleton;
     const fbase = vis.fascia ? (others ? 0.4 : 0.72) : 0;
     layers.fascia.meshes.forEach((m) => {
-      m.material.opacity = fbase;
-      m.visible = fbase > 0.02;
+      setTarget(m, fbase);
       m.material.depthWrite = false;
     });
   }
@@ -297,22 +334,36 @@ export default function App() {
 
   const register = useCallback((key, payload) => {
     layersRef.current[key] = payload;
+    if (import.meta.env.DEV && typeof window !== "undefined") window.__layers = layersRef.current;
     setReady((n) => n + 1);
   }, []);
   const markAbsent = useCallback((key, val) => {
     setPresent((p) => (p[key] === val ? p : { ...p, [key]: val }));
   }, []);
 
-  const onPick = useCallback((obj) => {
-    if (peelRef.current) {                 // 벗기기 모드: 클릭한 메시 숨김
-      hiddenRef.current.add(obj);
-      setHiddenCount((c) => c + 1);
-      return;
-    }
-    console.log("[picked mesh]", obj.name);
+  // 호버 대상(벗기기 미리보기용). 근육 위 포인터 이동 시 갱신.
+  const peelHoverRef = useRef(null);
+  const [peelHoverTick, setPeelHoverTick] = useState(0);
+  const setPeelHover = (next) => {
+    if (peelHoverRef.current !== next) { peelHoverRef.current = next; setPeelHoverTick((t) => t + 1); }
+  };
+  const onHover = useCallback((obj) => {
+    setHovering(!!obj);
+    setPeelHover(peelRef.current && obj ? obj : null);
+  }, []);
+
+  const peelOff = useCallback((obj) => {           // 근육 한 겹 벗기기(페이드 아웃)
+    hiddenRef.current.add(obj);
+    setPeelHover(null);                             // 벗긴 직후 미리보기 해제
+    setHiddenCount((c) => c + 1);
+  }, []);
+
+  const onPick = useCallback((obj, e) => {
+    // 벗기기 모드이거나 Alt+클릭이면 벗기기, 아니면 정보 선택
+    if (peelRef.current || (e && (e.altKey || e.metaKey))) { peelOff(obj); return; }
     const m = matchMuscle(obj.name);
     setSelected(m || { raw: obj.name });
-  }, []);
+  }, [peelOff]);
 
   // 벗기기 모드 토글
   const togglePeel = useCallback(() => {
@@ -320,12 +371,22 @@ export default function App() {
       const next = !p;
       peelRef.current = next;
       if (next) { setSelected(null); setMuscleOn(true); setBoneOn(false); } // 근육 전체 불투명하게
+      else setPeelHover(null);
       return next;
     });
+  }, []);
+  // 마지막으로 벗긴 근육 한 겹 되돌리기
+  const undoPeel = useCallback(() => {
+    const arr = Array.from(hiddenRef.current);
+    const last = arr[arr.length - 1];
+    if (!last) return;
+    hiddenRef.current.delete(last);
+    setHiddenCount((c) => c - 1);
   }, []);
   // 벗긴 근육 전체 복원
   const restorePeeled = useCallback(() => {
     hiddenRef.current.clear();
+    setPeelHover(null);
     setHiddenCount(0);
   }, []);
 
@@ -350,8 +411,8 @@ export default function App() {
   // 레이어 토글 / selected / focus / 벗기기 / 레이어 변동 시 머티리얼 갱신
   useEffect(() => {
     applyView(layersRef.current, { surface: surfaceOn, fascia: fasciaOn, muscle: muscleOn, skeleton: boneOn },
-      selected?.id, focus?.ids, hiddenRef.current);
-  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, hiddenCount, ready]);
+      selected?.id, focus?.ids, hiddenRef.current, peelHoverRef.current);
+  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, hiddenCount, ready, peelHoverTick]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
@@ -366,12 +427,16 @@ export default function App() {
         <directionalLight position={[4, 7, 6]} intensity={1.15} />
         <directionalLight position={[-5, 3, -6]} intensity={0.5} color="#8fbfe0" />
         <Suspense fallback={null}>
-          <Scene register={register} onPick={onPick} onHover={setHovering} present={markAbsent} ready={ready} />
+          <Scene register={register} onPick={onPick} onHover={onHover} present={markAbsent} ready={ready} />
         </Suspense>
+        <Tween layersRef={layersRef} />
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
       </Canvas>
 
       {panHeld && <div className="pan-hint">✥ 이동 모드 — 드래그로 위치 이동</div>}
+      {peelMode && !panHeld && (
+        <div className="pan-hint peel-hint">🔪 근육을 클릭해 한 겹씩 벗기기 · 올리면 미리보기</div>
+      )}
 
       <div className="masthead">
         <span className="plate">Atlas of Movement</span>
@@ -424,13 +489,18 @@ export default function App() {
             <span className="t-ico">🫁</span><span className="t-name">호흡근</span>
           </button>
           <button className={"tool" + (peelMode ? " on peel" : "")}
-            onClick={togglePeel} title="켜고 근육을 클릭하면 벗겨내 아래 근육이 보입니다">
+            onClick={togglePeel} title="켜고 근육을 클릭하면 한 겹씩 벗겨내 아래 근육이 보입니다 (Alt+클릭으로 바로 벗기기)">
             <span className="t-ico">🔪</span><span className="t-name">벗기기</span>
           </button>
           {hiddenCount > 0 && (
-            <button className="tool restore" onClick={restorePeeled} title="벗긴 근육 모두 되돌리기">
-              <span className="t-ico">↺</span><span className="t-name">복원 {hiddenCount}</span>
-            </button>
+            <>
+              <button className="tool restore" onClick={undoPeel} title="마지막으로 벗긴 근육 한 겹 되돌리기">
+                <span className="t-ico">↶</span><span className="t-name">한 겹</span>
+              </button>
+              <button className="tool restore" onClick={restorePeeled} title="벗긴 근육 모두 되돌리기">
+                <span className="t-ico">↺</span><span className="t-name">전체 {hiddenCount}</span>
+              </button>
+            </>
           )}
         </div>
       </div>
