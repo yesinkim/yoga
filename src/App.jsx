@@ -360,7 +360,8 @@ export default function App() {
 
   return (
     <div className="wrap" style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
-      <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }} gl={{ alpha: true }}>
+      <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }} gl={{ alpha: true }}
+        onPointerMissed={() => setSelected(null)}>
         <hemisphereLight args={["#cdd9e6", "#1a1f27", 0.85]} />
         <directionalLight position={[4, 7, 6]} intensity={1.15} />
         <directionalLight position={[-5, 3, -6]} intensity={0.5} color="#8fbfe0" />
@@ -443,7 +444,8 @@ export default function App() {
       </footer>
 
       {selected && (
-        <aside className="card">
+        <aside className="card" key={selected.id || selected.ko}>
+          <span className="card-grip" aria-hidden="true" />
           <button className="x" onClick={() => setSelected(null)} aria-label="닫기">×</button>
           {selected.id ? (
             <>

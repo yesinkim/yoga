@@ -69,9 +69,15 @@ canvas{touch-action:none;}
 .tool.restore:hover{background:rgba(236,227,207,.12);}
 
 .card{position:absolute;z-index:8;right:20px;top:50%;transform:translateY(-50%);
-  width:330px;max-width:calc(100vw - 40px);color:var(--ink);
+  width:330px;max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);overflow-y:auto;color:var(--ink);
   background:linear-gradient(180deg,#f7f0e1,#efe5cf);border:1px solid var(--parchment-edge);
-  border-radius:18px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.5);}
+  border-radius:18px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.5);
+  animation:cardIn .26s cubic-bezier(.22,.9,.32,1);}
+.card::-webkit-scrollbar{width:5px;}
+.card::-webkit-scrollbar-thumb{background:rgba(125,107,80,.3);border-radius:5px;}
+@keyframes cardIn{from{opacity:0;transform:translateY(-50%) translateX(14px);}
+  to{opacity:1;transform:translateY(-50%) translateX(0);}}
+.card-grip{display:none;}
 .card .x{position:absolute;top:12px;right:12px;width:30px;height:30px;border:none;border-radius:50%;
   background:rgba(125,107,80,.12);color:var(--sepia);font-size:17px;cursor:pointer;line-height:1;}
 .card .x:hover{background:rgba(125,107,80,.22);}
@@ -249,12 +255,20 @@ canvas{touch-action:none;}
   .layer .lr-name{flex:none;}
   .tools{flex-direction:row;gap:6px;border-top:none;padding-top:0;}
   .tool{flex:1;justify-content:center;padding:9px 6px;gap:6px;}
-  .card{right:12px;left:12px;top:auto;bottom:150px;transform:none;width:auto;max-height:46vh;overflow:auto;}
+  /* 카드를 하단 시트로 — 콘솔 위에 겹치지 않게 아래에서 올라옴 */
+  .card{left:0;right:0;bottom:0;top:auto;transform:none;width:auto;max-width:none;
+    border-radius:22px 22px 0 0;padding:16px 18px 22px;max-height:min(72vh,560px);overflow-y:auto;
+    box-shadow:0 -14px 44px rgba(0,0,0,.5);animation:sheetIn .28s ease both;
+    padding-bottom:calc(22px + env(safe-area-inset-bottom,0px));
+    -webkit-overflow-scrolling:touch;}
+  @keyframes sheetIn{from{opacity:0;transform:translateY(40px);}to{opacity:1;transform:translateY(0);}}
+  .card-grip{display:block;position:sticky;top:0;width:40px;height:4px;border-radius:4px;margin:0 auto 12px;
+    background:rgba(125,107,80,.35);}
+  .card .x{top:14px;right:14px;}
   .masthead{left:14px;right:14px;}
-  .search-trigger{top:auto;right:12px;bottom:150px;}
-  .search-panel{right:12px;top:auto;bottom:210px;}
+  .search-trigger{top:14px;right:12px;bottom:auto;}
+  .search-panel{right:12px;top:60px;bottom:auto;}
   .attribution{display:none;}
   .focus-bar{top:58px;width:calc(100vw - 24px);max-height:34vh;overflow:auto;}
-  .card{bottom:200px;max-height:38vh;}
 }
 :focus-visible{outline:2px solid var(--jade);outline-offset:2px;}
