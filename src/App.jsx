@@ -290,6 +290,8 @@ export default function App() {
   const [muscleOn, setMuscleOn] = useState(true);    // 근육 표시
   const [boneOn, setBoneOn] = useState(false);       // 뼈 표시
   const [selected, setSelected] = useState(null); // muscle obj | {raw} | null
+  const [cardExpanded, setCardExpanded] = useState(false); // 모바일 카드 펼침(기본 접힘)
+  useEffect(() => { setCardExpanded(false); }, [selected]); // 새 선택마다 접힌 상태로
   const [focus, setFocus] = useState(null); // { kind, title, sub, ids:Set, list:[muscle] } | null
   const [hovering, setHovering] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false); // 받은 제안 목록 패널
@@ -559,8 +561,9 @@ export default function App() {
       </footer>
 
       {selected && (
-        <aside className="card" key={selected.id || selected.ko}>
-          <span className="card-grip" aria-hidden="true" />
+        <aside className={"card" + (cardExpanded ? " expanded" : "")} key={selected.id || selected.ko}>
+          <button className="card-grip" onClick={() => setCardExpanded((v) => !v)}
+            aria-label={cardExpanded ? "카드 접기" : "카드 펼치기"} />
           <button className="x" onClick={() => setSelected(null)} aria-label="닫기">×</button>
           {selected.id ? (
             <>
