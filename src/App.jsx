@@ -2,7 +2,7 @@ import React, {
   Suspense, useCallback, useEffect, useMemo, useRef, useState, memo,
 } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { OrbitControls, useGLTF, useProgress } from "@react-three/drei";
+import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
@@ -106,8 +106,15 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
       }
       if (tint && o.material.color) {
         o.material.color.set(tint).multiplyScalar(shade(o.name || layerKey));
-        if ("roughness" in o.material) o.material.roughness = 0.72;
+        if (isMuscle) {
+          // 인접 근육이 구분되도록 채도·명도에 살짝 변주를 준다
+          const hsl = {}; o.material.color.getHSL(hsl);
+          const j = (shade(o.name || "") - 0.84) / 0.30; // 0~1
+          o.material.color.setHSL(hsl.h, Math.min(1, hsl.s * (1.02 + j * 0.16)), hsl.l * (0.9 + j * 0.16));
+        }
+        if ("roughness" in o.material) o.material.roughness = isMuscle ? 0.52 : 0.7; // 근육은 촉촉하게
         if ("metalness" in o.material) o.material.metalness = 0.0;
+        if ("envMapIntensity" in o.material) o.material.envMapIntensity = isMuscle ? 0.55 : 0.3;
       }
       o.userData.baseColor = o.material.color.clone();
       o.userData.baseEmissive = new THREE.Color(0x000000);
@@ -458,11 +465,19 @@ export default function App() {
 
   return (
     <div className="wrap" style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
-      <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }} gl={{ alpha: true }}
+      <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }}
+        gl={{ alpha: true, antialias: true }}
+        onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 0.98; }}
         onPointerMissed={() => setSelected(null)}>
-        <hemisphereLight args={["#cdd9e6", "#1a1f27", 0.85]} />
-        <directionalLight position={[4, 7, 6]} intensity={1.15} />
-        <directionalLight position={[-5, 3, -6]} intensity={0.5} color="#8fbfe0" />
+        <hemisphereLight args={["#d6e0e8", "#1c1310", 0.42]} />
+        <directionalLight position={[5, 8, 6]} intensity={1.15} color="#fff1e0" />  {/* 따뜻한 키 */}
+        <directionalLight position={[-6, 2, -5]} intensity={0.5} color="#9fc4e8" />  {/* 차가운 필 */}
+        <directionalLight position={[0, 4, -8]} intensity={0.7} color="#ffcdb0" />   {/* 뒤 림라이트로 근육 윤곽 */}
+        <Environment resolution={64}>
+          <Lightformer intensity={1.4} position={[0, 2, 4]} scale={[8, 8, 1]} color="#fff2e6" />
+          <Lightformer intensity={0.7} position={[-4, 0, 2]} scale={[3, 6, 1]} color="#b6cee6" />
+          <Lightformer intensity={0.7} position={[4, 1, -3]} scale={[4, 5, 1]} color="#ffd2ba" />
+        </Environment>
         <Suspense fallback={null}>
           <Scene register={register} onPick={onPick} onHover={onHover} present={markAbsent} ready={ready} />
         </Suspense>
