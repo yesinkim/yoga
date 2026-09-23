@@ -1,8 +1,8 @@
 // ──────────────────────────────────────────────────────────────────────────
 // 수리야나마스카라(태양 경배, Satyananda 12동작) — 관절 마네킹 애니메이션
 //
-// 해부 모델은 리깅이 없어 직접 움직일 수 없으므로, 옆에서 본 단순 관절 마네킹이
-// 동작을 보여 주고 App은 동작별 동원 근육(ids)을 해부 모델에 강조한다.
+// 같은 관절 각도로 해부 모델 자체도 굽힌다(poseRig.js). 이 마네킹은 옆모습 참고용 미니 뷰이고,
+// App은 동작별 동원 근육(ids)을 해부 모델에 강조한다.
 // ──────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -12,7 +12,7 @@ const D = Math.PI / 180;
 
 // 읽기 쉬운 각도(굴곡 +) → 관절 rotation.x(도).
 // 모든 관절은 옆면(X축 회전)만 쓴다. foot = 발의 월드 각도(0 평평, 90 발끝 세움, 180 발등 바닥).
-function toRaw(p) {
+export function toRaw(p) {
   const r = {
     root: p.lean, spine: p.spine, chest: p.chest, neck: p.neck,
     shL: -p.armL, shR: -p.armR, elL: -p.elbowL, elR: -p.elbowR,
@@ -35,8 +35,8 @@ const mirror = (p) => ({
 const PRANAM = sym({ lean: 0, spine: 0, chest: 0, neck: 0, arm: 15, elbow: 100, hip: 0, knee: 0, foot: 0 });
 const HASTA = sym({ lean: -5, spine: -12, chest: -15, neck: -15, arm: 168, elbow: 0, hip: -5, knee: 0, foot: 0 });
 const PADAHASTA = sym({ lean: 80, spine: 25, chest: 20, neck: 10, arm: 140, elbow: 0, hip: 80, knee: 5, foot: 0 });
-// 오른발을 뒤로 뻗은 기마 자세 (왼발 앞)
-const ASHWA_R_BACK = {
+// +x쪽(사람의 왼발)을 뒤로 뻗은 기마 자세. L = x<0 = 사람의 오른쪽
+const ASHWA_PX_BACK = {
   lean: 55, spine: -5, chest: -5, neck: -30,
   armL: 50, armR: 50, elbowL: 0, elbowR: 0,
   hipL: 140, kneeL: 90, footL: 0,
@@ -60,12 +60,12 @@ export const SUN_POSES = [
   { ko: "프라나마사나", sa: "Pranamasana", note: "기도 자세", breath: "날숨", pose: PRANAM, ids: IDS.pranam },
   { ko: "하스타 우타나사나", sa: "Hasta Uttanasana", note: "팔 들어 뒤로 젖히기", breath: "들숨", pose: HASTA, ids: IDS.hasta },
   { ko: "파다하스타사나", sa: "Padahastasana", note: "앞으로 숙여 손을 발 옆에", breath: "날숨", pose: PADAHASTA, ids: IDS.padahasta },
-  { ko: "아쉬와 산찰라나사나", sa: "Ashwa Sanchalanasana", note: "오른발 뒤로 · 기마 자세", breath: "들숨", pose: ASHWA_R_BACK, ids: IDS.ashwa },
+  { ko: "아쉬와 산찰라나사나", sa: "Ashwa Sanchalanasana", note: "오른발 뒤로 · 기마 자세", breath: "들숨", pose: mirror(ASHWA_PX_BACK), ids: IDS.ashwa },
   { ko: "파르바타사나", sa: "Parvatasana", note: "산 자세", breath: "날숨", pose: PARVATA, ids: IDS.parvata },
   { ko: "아쉬탕가 나마스카라", sa: "Ashtanga Namaskara", note: "무릎·가슴·턱을 바닥에", breath: "숨 멈춤", pose: ASHTANGA, ids: IDS.ashtanga },
   { ko: "부장가사나", sa: "Bhujangasana", note: "코브라", breath: "들숨", pose: BHUJANGA, ids: IDS.bhujanga },
   { ko: "파르바타사나", sa: "Parvatasana", note: "산 자세", breath: "날숨", pose: PARVATA, ids: IDS.parvata },
-  { ko: "아쉬와 산찰라나사나", sa: "Ashwa Sanchalanasana", note: "오른발 앞으로 · 기마 자세", breath: "들숨", pose: mirror(ASHWA_R_BACK), ids: IDS.ashwa },
+  { ko: "아쉬와 산찰라나사나", sa: "Ashwa Sanchalanasana", note: "오른발 앞으로 · 기마 자세", breath: "들숨", pose: ASHWA_PX_BACK, ids: IDS.ashwa },
   { ko: "파다하스타사나", sa: "Padahastasana", note: "앞으로 숙이기", breath: "날숨", pose: PADAHASTA, ids: IDS.padahasta },
   { ko: "하스타 우타나사나", sa: "Hasta Uttanasana", note: "팔 들어 뒤로 젖히기", breath: "들숨", pose: HASTA, ids: IDS.hasta },
   { ko: "프라나마사나", sa: "Pranamasana", note: "기도 자세", breath: "날숨", pose: PRANAM, ids: IDS.pranam },
@@ -120,7 +120,7 @@ function applyPose({ outer, j }, r) {
   outer.position.set(0, -box.min.y, -(box.min.z + box.max.z) / 2);
 }
 
-const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+export const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 function Mannequin({ pose }) {
   const rig = useMemo(buildRig, []);

@@ -4,7 +4,8 @@ import React, {
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
-import { SunPanel, SUN_POSES } from "./SunSalutation.jsx";
+import { SunPanel, SUN_POSES, toRaw, ease } from "./SunSalutation.jsx";
+import { buildPoseRig, BONE_KEYS } from "./poseRig.js";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
@@ -13,6 +14,7 @@ const PEEL_GHOST = new THREE.Color("#c86b5a"); // 벗기기 미리보기(호버)
 // 클릭이 통과해 안쪽 근육이 잡히게 한다. 복원 시 원래 raycast로 되돌린다.
 const NOOP_RAYCAST = () => {};
 const MESH_RAYCAST = THREE.Mesh.prototype.raycast;
+const SKIN_RAYCAST = THREE.SkinnedMesh.prototype.raycast; // 포즈용으로 스키닝된 메시
 
 // Draco 압축 glb 디코더 경로 (public/draco/, 로컬 호스팅 → 오프라인 동작)
 const DRACO_PATH = `${import.meta.env.BASE_URL}draco/`;
@@ -171,6 +173,56 @@ function Rig({ children, ready }) {
   return <group ref={ref}>{children}</group>;
 }
 
+// 태양경배 중엔 해부 모델 자체를 굽힌다. 처음 켤 때 한 번 자동 스키닝(1~2초).
+const REST_RAW = Object.fromEntries(BONE_KEYS.map((k) => [k, 0]));
+function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
+  const rig = useRef(null);
+  const cur = useRef(REST_RAW), from = useRef(REST_RAW), to = useRef(REST_RAW), t = useRef(1);
+  const [built, setBuilt] = useState(false);
+  const { camera, controls } = useThree();
+  if (import.meta.env.DEV && typeof window !== "undefined") window.__poser = { camera, controls, rig };
+  useEffect(() => {
+    if (!active || rig.current) return;
+    const L = layersRef.current;
+    if (!L.muscle || !L.skeleton) return;
+    onState("rigging");
+    const id = setTimeout(() => {
+      try { rig.current = buildPoseRig(L); setBuilt(true); onState("ready"); }
+      catch (e) { console.error(e); onState("error"); }
+    }, 80);
+    return () => clearTimeout(id);
+  }, [active, ready, layersRef, onState]);
+  useEffect(() => {
+    if (!rig.current) return;
+    from.current = cur.current;
+    to.current = active ? toRaw(pose) : REST_RAW;
+    t.current = 0;
+  }, [active, pose, built]);
+  useEffect(() => { // 동작이 잘 보이도록 옆(3/4) 시점으로, 끄면 정면으로
+    if (!controls) return;
+    const d = camera.position.distanceTo(controls.target);
+    if (active) camera.position.set(d * 0.8, d * 0.1, d * 0.58);
+    else camera.position.set(0, 0, d);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }, [active, camera, controls]);
+  useFrame((_, dt) => {
+    if (!rig.current || t.current >= 1.6) return;  // 1까지 자세 보간, 1.6까지 카메라 따라가기
+    t.current = Math.min(1.6, t.current + dt / 1.1);
+    const e = ease(Math.min(1, t.current)), a = from.current, b = to.current, c = {};
+    for (const k of BONE_KEYS) c[k] = (a[k] || 0) + ((b[k] || 0) - (a[k] || 0)) * e;
+    cur.current = c;
+    rig.current.apply(c);
+    if (controls) { // 자세 중심을 따라 시선 높이를 옮긴다(궤도 각도는 유지)
+      const ty = active ? rig.current.worldCenter().y : 0;
+      const dy = (ty - controls.target.y) * Math.min(1, dt * 4);
+      controls.target.y += dy; camera.position.y += dy;
+      controls.update();
+    }
+  });
+  return null;
+}
+
 // 목표 불투명도(userData.tOpacity)로 매 프레임 부드럽게 수렴 → 벗기기·레이어 전환이 페이드로
 function Tween({ layersRef }) {
   useFrame((_, dt) => {
@@ -245,7 +297,7 @@ function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
         }
         return;
       }
-      if (key === "muscle") m.raycast = MESH_RAYCAST;
+      if (key === "muscle") m.raycast = m.isSkinnedMesh ? SKIN_RAYCAST : MESH_RAYCAST;
       let op = base;
       let hl = false;
       if (key === "muscle") {
@@ -443,6 +495,7 @@ export default function App() {
   const [sunOn, setSunOn] = useState(false);
   const [sunStep, setSunStep] = useState(0);
   const [sunPlaying, setSunPlaying] = useState(true);
+  const [poseState, setPoseState] = useState("idle"); // idle | rigging | ready | error
   const toggleSun = useCallback(() => {
     setSunOn((on) => {
       if (on) { setFocus(null); return false; }
@@ -506,6 +559,8 @@ export default function App() {
           <Scene register={register} onPick={onPick} onHover={onHover} present={markAbsent} ready={ready} />
         </Suspense>
         <Tween layersRef={layersRef} />
+        <AnatomyPoser layersRef={layersRef} active={sunOn} pose={SUN_POSES[sunStep].pose}
+          ready={ready} onState={setPoseState} />
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
       </Canvas>
 
@@ -554,6 +609,13 @@ export default function App() {
       {sunOn && (
         <SunPanel step={sunStep} setStep={setSunStep} playing={sunPlaying}
           setPlaying={setSunPlaying} onClose={clearFocus} />
+      )}
+
+      {sunOn && poseState === "rigging" && (
+        <div className="pan-hint">🦴 근육에 관절 심는 중… (처음 한 번, 몇 초)</div>
+      )}
+      {sunOn && poseState === "error" && (
+        <div className="pan-hint">근육 굽히기 준비에 실패했어요 — 마네킹만 표시합니다</div>
       )}
 
       {!anyLoaded && !bothMissing && <LoadingOverlay />}
