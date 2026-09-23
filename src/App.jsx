@@ -4,6 +4,7 @@ import React, {
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
+import { SunPanel, SUN_POSES } from "./SunSalutation.jsx";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
@@ -434,11 +435,34 @@ export default function App() {
   const focusAsana = useCallback((ko, sa) => {
     const list = musclesForAsana(sa);
     if (!list.length) return;
+    setSunOn(false);
     setFocus({ kind: "asana", title: ko, sub: sa, ids: new Set(list.map((m) => m.id)), list });
   }, []);
 
+  // 수리야나마스카라 — 마네킹이 동작을 보여 주고, 동작별 동원 근육을 해부 모델에 강조
+  const [sunOn, setSunOn] = useState(false);
+  const [sunStep, setSunStep] = useState(0);
+  const [sunPlaying, setSunPlaying] = useState(true);
+  const toggleSun = useCallback(() => {
+    setSunOn((on) => {
+      if (on) { setFocus(null); return false; }
+      setSunStep(0); setSunPlaying(true);
+      setSelected(null); setMuscleOn(true); setBoneOn(false);
+      return true;
+    });
+  }, []);
+  useEffect(() => {
+    if (!sunOn) return;
+    const s = SUN_POSES[sunStep];
+    const list = MUSCLES.filter((m) => s.ids.includes(m.id))
+      .sort((a, b) => s.ids.indexOf(a.id) - s.ids.indexOf(b.id));
+    setFocus({ kind: "sun", title: s.ko, sub: `${sunStep + 1}/${SUN_POSES.length} · ${s.breath}`, ids: new Set(s.ids), list });
+  }, [sunOn, sunStep]);
+  const clearFocus = useCallback(() => { setFocus(null); setSunOn(false); }, []);
+
   // 호흡근 모드 토글
   const toggleBreathing = useCallback(() => {
+    setSunOn(false);
     setFocus((f) => {
       if (f?.kind === "breath") return null;
       const list = MUSCLES.filter((m) => BREATHING_IDS.includes(m.id))
@@ -508,13 +532,15 @@ export default function App() {
       <MuscleSearch muscles={MUSCLES} onSelect={(m) => { setSelected(m); }} />
 
       {focus && (
-        <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : "")}>
+        <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : focus.kind === "sun" ? " sun" : "")}>
           <div className="fb-head">
-            <span className="fb-kind">{focus.kind === "breath" ? "호흡근 모드" : "아사나 동원 근육"}</span>
+            <span className="fb-kind">
+              {focus.kind === "breath" ? "호흡근 모드" : focus.kind === "sun" ? "☀️ 수리야나마스카라" : "아사나 동원 근육"}
+            </span>
             <strong>{focus.title}</strong>
             {focus.sub && <i>{focus.sub}</i>}
             <span className="fb-count">{focus.list.length}</span>
-            <button className="fb-x" onClick={() => setFocus(null)} aria-label="강조 해제">✕ 해제</button>
+            <button className="fb-x" onClick={clearFocus} aria-label="강조 해제">✕ 해제</button>
           </div>
           <div className="fb-muscles">
             {focus.list.map((m) => (
@@ -523,6 +549,11 @@ export default function App() {
             ))}
           </div>
         </div>
+      )}
+
+      {sunOn && (
+        <SunPanel step={sunStep} setStep={setSunStep} playing={sunPlaying}
+          setPlaying={setSunPlaying} onClose={clearFocus} />
       )}
 
       {!anyLoaded && !bothMissing && <LoadingOverlay />}
@@ -549,6 +580,10 @@ export default function App() {
           <button className={"tool" + (focus?.kind === "breath" ? " on" : "")}
             onClick={toggleBreathing} title="호흡근만 강조 — 횡격막·늑간근·사각근·복부">
             <span className="t-ico">🫁</span><span className="t-name">호흡근</span>
+          </button>
+          <button className={"tool" + (sunOn ? " on" : "")}
+            onClick={toggleSun} title="수리야나마스카라 12동작 — 동작별 동원 근육 강조">
+            <span className="t-ico">☀️</span><span className="t-name">태양경배</span>
           </button>
           <button className={"tool" + (peelMode ? " on peel" : "")}
             onClick={togglePeel} title="켜고 근육을 클릭하면 한 겹씩 벗겨내 아래 근육이 보입니다 (Alt+클릭으로 바로 벗기기)">
