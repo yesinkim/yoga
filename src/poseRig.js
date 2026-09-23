@@ -118,9 +118,9 @@ export function buildPoseRig(layers) {
     b.position.copy(p);
     (parent[k] ? B[parent[k]] : F).add(b);
   }
-  const bones = BONE_KEYS.map((k) => B[k]);
-  const skeleton = new THREE.Skeleton(bones);
   F.updateMatrixWorld(true);
+  const bones = BONE_KEYS.map((k) => B[k]);
+  const skeleton = new THREE.Skeleton(bones); // 지금(선 자세) 기준으로 역행렬 계산 — 이후 다시 계산하지 않는다
 
   // ── 웨이트용 선분 (뼈 인덱스별) ──
   const idx = Object.fromEntries(BONE_KEYS.map((k, i) => [k, i]));
@@ -152,11 +152,22 @@ export function buildPoseRig(layers) {
   const best = new Float32Array(BONE_KEYS.length);
   const done = new Map(); // geometry → matrix(중복 공유 지오메트리 처리)
   const all = [];
-  for (const key of ["muscle", "skeleton", "surface", "fascia"]) {
-    for (const m of layers[key]?.meshes || []) all.push(m);
+  // 아직 스키닝 안 된 메시에 웨이트를 계산해 붙인다(나중에 로드된 피부도 여기로)
+  function skinNew(ls) {
+    const fresh = [];
+    for (const key of ["muscle", "skeleton", "surface", "fascia"]) {
+      for (const m of ls[key]?.meshes || []) if (!m.isSkinnedMesh) fresh.push(m);
+    }
+    if (!fresh.length) return;
+    // 막 추가된 레이어는 아직 렌더 전이라 부모 오프셋이 월드 행렬에 안 들어가 있다 → 맨 위부터 갱신
+    const roots = new Set();
+    for (const m of fresh) { let t = m; while (t.parent) t = t.parent; roots.add(t); }
+    roots.forEach((r) => r.updateMatrixWorld(true));
+    skinMeshes(fresh);
+    all.push(...fresh);
   }
-  for (const m of all) {
-    if (m.isSkinnedMesh) continue;
+  function skinMeshes(list) {
+  for (const m of list) {
     _m.multiplyMatrices(invF, m.matrixWorld);
     if (done.has(m.geometry) && !done.get(m.geometry).equals(_m)) m.geometry = m.geometry.clone();
     const g = m.geometry;
@@ -192,6 +203,8 @@ export function buildPoseRig(layers) {
     let dom = 0; for (let b = 1; b < votes.length; b++) if (votes[b] > votes[dom]) dom = b;
     makeSkinned(m, skeleton, dom);
   }
+  }
+  skinNew(layers);
 
   // ── 접지용 표면 탐침(뼈에 붙은 점) ──
   const probes = [];
@@ -239,7 +252,7 @@ export function buildPoseRig(layers) {
     for (const o of probes) bb.expandByPoint(o.getWorldPosition(wp));
     return bb.getCenter(center);
   }
-  return { apply, worldCenter, skeleton, joints: J };
+  return { apply, worldCenter, skinNew, skeleton, joints: J };
 }
 
 // 기존 Mesh를 그대로(참조 유지) SkinnedMesh로 바꾼다 — 강조/벗기기/클릭 로직이 같은 객체를 계속 쓰게
@@ -262,5 +275,5 @@ function makeSkinned(m, skeleton, dom) {
     this.boundingSphere.radius *= 1.25;
     return this;
   };
-  m.bind(skeleton);
+  m.bind(skeleton, m.matrixWorld); // 행렬을 넘겨 뼈 역행렬 재계산(자세 중이면 틀어짐)을 막는다
 }

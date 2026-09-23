@@ -192,6 +192,11 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
     }, 80);
     return () => clearTimeout(id);
   }, [active, ready, layersRef, onState]);
+  useEffect(() => { // 나중에 로드된 레이어(피부)도 뼈대에 붙인다
+    if (!rig.current) return;
+    rig.current.skinNew(layersRef.current);
+    rig.current.apply(cur.current);
+  }, [ready, layersRef]);
   useEffect(() => {
     if (!rig.current) return;
     from.current = cur.current;
@@ -252,10 +257,10 @@ function Tween({ layersRef }) {
   return null;
 }
 
-function Scene({ register, onPick, onHover, present, ready }) {
+function Scene({ register, onPick, onHover, present, fitKey, layers }) {
   return (
-    <Rig ready={ready}>
-      {LAYER_ORDER.map((key) => (
+    <Rig ready={fitKey}>
+      {layers.map((key) => (
         <Suspense key={key} fallback={null}>
           <LayerBoundary onMissing={() => present(key, false)}>
             <LayerLoader
@@ -354,6 +359,9 @@ export default function App() {
   const [present, setPresent] = useState({ surface: true, muscle: true, skeleton: true });
   const [ready, setReady] = useState(0);  // 레이어 등록될 때마다 +1
   const [surfaceOn, setSurfaceOn] = useState(false); // 피부 표시
+  const [surfaceWanted, setSurfaceWanted] = useState(false); // 피부 glb는 처음 켤 때 받는다
+  useEffect(() => { if (surfaceOn) setSurfaceWanted(true); }, [surfaceOn]);
+  const loadLayers = LAYER_ORDER.filter((k) => k !== "surface" || surfaceWanted);
   const [fasciaOn, setFasciaOn] = useState(false);   // 근막 표시
   const [muscleOn, setMuscleOn] = useState(true);    // 근육 표시
   const [boneOn, setBoneOn] = useState(false);       // 뼈 표시
@@ -540,6 +548,8 @@ export default function App() {
   }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, peelCount, ready, peelHoverTick]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
+  // 화면 맞춤은 근육·뼈가 들어올 때만(나중에 피부가 로드돼도 카메라가 튀지 않게)
+  const coreLoaded = ["muscle", "skeleton"].filter((k) => layersRef.current[k]).length;
   const anyLoaded = layerCount > 0;
   // 필수 두 레이어가 모두 "없음"으로 확정된 경우에만 안내(그 전엔 로딩 중)
   const bothMissing = present.muscle === false && present.skeleton === false;
@@ -564,7 +574,8 @@ export default function App() {
           <Lightformer intensity={0.7} position={[4, 1, -3]} scale={[4, 5, 1]} color="#ffd2ba" />
         </Environment>
         <Suspense fallback={null}>
-          <Scene register={register} onPick={onPick} onHover={onHover} present={markAbsent} ready={ready} />
+          <Scene register={register} onPick={onPick} onHover={onHover} present={markAbsent}
+            fitKey={coreLoaded} layers={loadLayers} />
         </Suspense>
         <Tween layersRef={layersRef} />
         <AnatomyPoser layersRef={layersRef} active={sunOn} pose={SUN_POSES[sunStep].pose}
