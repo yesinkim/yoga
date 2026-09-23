@@ -198,11 +198,19 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
     to.current = active ? toRaw(pose) : REST_RAW;
     t.current = 0;
   }, [active, pose, built]);
-  useEffect(() => { // 동작이 잘 보이도록 옆(3/4) 시점으로, 끄면 정면으로
+  const restDist = useRef(null);
+  useEffect(() => { // 동작이 잘 보이도록 옆(3/4) 시점으로, 끄면 원래 정면으로
     if (!controls) return;
-    const d = camera.position.distanceTo(controls.target);
-    if (active) camera.position.set(d * 0.8, d * 0.1, d * 0.58);
-    else camera.position.set(0, 0, d);
+    if (active) {
+      if (restDist.current == null) restDist.current = camera.position.distanceTo(controls.target);
+      // 세로로 좁은 화면(모바일)에서도 옆으로 긴 자세(다운독 등)가 다 들어오게 화면 비율로 거리 계산
+      const v = Math.tan((camera.fov * Math.PI) / 360);
+      const d = Math.max(1.15 / v, 1.05 / (v * camera.aspect));
+      camera.position.set(d * 0.8, d * 0.1, d * 0.58);
+    } else if (restDist.current != null) {
+      camera.position.set(0, 0, restDist.current);
+      restDist.current = null;
+    }
     controls.target.set(0, 0, 0);
     controls.update();
   }, [active, camera, controls]);
@@ -541,7 +549,7 @@ export default function App() {
   void peelHoverTick;
 
   return (
-    <div className="wrap" style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
+    <div className={"wrap" + (sunOn ? " sun-on" : "")} style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
       <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }}
         gl={{ alpha: true, antialias: true }}
         onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 0.98; }}
@@ -590,7 +598,7 @@ export default function App() {
         <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : focus.kind === "sun" ? " sun" : "")}>
           <div className="fb-head">
             <span className="fb-kind">
-              {focus.kind === "breath" ? "호흡근 모드" : focus.kind === "sun" ? "☀️ 수리야나마스카라" : "아사나 동원 근육"}
+              {focus.kind === "breath" ? "호흡근 모드" : focus.kind === "sun" ? "☀️ 수리야나마스카라 A" : "아사나 동원 근육"}
             </span>
             <strong>{focus.title}</strong>
             {focus.sub && <i>{focus.sub}</i>}
@@ -644,7 +652,7 @@ export default function App() {
             <span className="t-ico">🫁</span><span className="t-name">호흡근</span>
           </button>
           <button className={"tool" + (sunOn ? " on" : "")}
-            onClick={toggleSun} title="수리야나마스카라 12동작 — 동작별 동원 근육 강조">
+            onClick={toggleSun} title="수리야나마스카라 A — 동작별로 근육이 움직이고 동원 근육 강조">
             <span className="t-ico">☀️</span><span className="t-name">태양경배</span>
           </button>
           <button className={"tool" + (peelMode ? " on peel" : "")}

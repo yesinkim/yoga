@@ -325,12 +325,21 @@ canvas{touch-action:none;}
   .attribution{display:none;}
   .focus-bar{top:58px;width:calc(100vw - 24px);max-height:34vh;overflow:auto;}
   .peel-toast{bottom:auto;top:56px;}
-  .sun-panel{left:auto;right:12px;bottom:150px;width:170px;border-radius:14px;}
-  .sun-stage{height:140px;}
-  .sun-info{padding:6px 10px 0;}
-  .sun-info b{font-size:13.5px;}
-  .sun-info i{display:none;}
-  .sun-ctrl{padding:8px;gap:4px;}
-  .sun-ctrl .sun-x{width:28px;}
+  /* 태양경배: 근육 모델이 직접 움직이므로 마네킹·콘솔을 숨기고 아래 한 줄 컨트롤만 */
+  .wrap.sun-on .console{display:none;}
+  .sun-panel{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));width:auto;
+    border-radius:16px;display:flex;align-items:center;}
+  .sun-stage{display:none;}
+  .sun-info{flex:1;min-width:0;padding:8px 4px 8px 12px;gap:2px 6px;}
+  .sun-info b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sun-info i{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sun-ctrl{flex:none;padding:8px 8px 8px 0;gap:4px;}
+  .sun-ctrl button{width:38px;flex:none;padding:8px 0;}
+  .sun-ctrl .sun-x{width:30px;}
+  .focus-bar.sun{padding:9px 12px;max-height:none;}
+  .focus-bar.sun .fb-head i,.focus-bar.sun .fb-count{display:none;}
+  .focus-bar.sun .fb-muscles{flex-wrap:nowrap;overflow-x:auto;margin-top:7px;padding-bottom:2px;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .focus-bar.sun .fb-chip{flex:none;padding:4px 9px;font-size:12px;}
 }
 :focus-visible{outline:2px solid var(--jade);outline-offset:2px;}

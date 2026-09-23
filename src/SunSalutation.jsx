@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────
-// 수리야나마스카라(태양 경배, Satyananda 12동작) — 관절 마네킹 애니메이션
+// 수리야나마스카라 A(아쉬탕가 태양 경배) — 관절 마네킹 애니메이션
 //
 // 같은 관절 각도로 해부 모델 자체도 굽힌다(poseRig.js). 이 마네킹은 옆모습 참고용 미니 뷰이고,
 // App은 동작별 동원 근육(ids)을 해부 모델에 강조한다.
@@ -27,48 +27,39 @@ const sym = (o) => ({
   armL: o.arm, armR: o.arm, elbowL: o.elbow, elbowR: o.elbow,
   hipL: o.hip, hipR: o.hip, kneeL: o.knee, kneeR: o.knee, footL: o.foot, footR: o.foot,
 });
-const mirror = (p) => ({
-  ...p, armL: p.armR, armR: p.armL, elbowL: p.elbowR, elbowR: p.elbowL,
-  hipL: p.hipR, hipR: p.hipL, kneeL: p.kneeR, kneeR: p.kneeL, footL: p.footR, footR: p.footL,
-});
 
-const PRANAM = sym({ lean: 0, spine: 0, chest: 0, neck: 0, arm: 15, elbow: 100, hip: 0, knee: 0, foot: 0 });
-const HASTA = sym({ lean: -5, spine: -12, chest: -15, neck: -15, arm: 168, elbow: 0, hip: -5, knee: 0, foot: 0 });
-const PADAHASTA = sym({ lean: 80, spine: 25, chest: 20, neck: 10, arm: 140, elbow: 0, hip: 80, knee: 5, foot: 0 });
-// +x쪽(사람의 왼발)을 뒤로 뻗은 기마 자세. L = x<0 = 사람의 오른쪽
-const ASHWA_PX_BACK = {
-  lean: 55, spine: -5, chest: -5, neck: -30,
-  armL: 50, armR: 50, elbowL: 0, elbowR: 0,
-  hipL: 140, kneeL: 90, footL: 0,
-  hipR: 25, kneeR: 60, footR: 150,
-};
-const PARVATA = sym({ lean: 125, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 85, knee: 0, foot: 0 });
-const ASHTANGA = sym({ lean: 100, spine: 0, chest: 0, neck: -10, arm: -10, elbow: 110, hip: 40, knee: 35, foot: 90 });
-const BHUJANGA = sym({ lean: 90, spine: -22, chest: -18, neck: -15, arm: -20, elbow: 100, hip: 0, knee: 0, foot: 180 });
+const SAMA = sym({ lean: 0, spine: 0, chest: 0, neck: 0, arm: 3, elbow: 5, hip: 0, knee: 0, foot: 0 });
+const URDHVA_HASTA = sym({ lean: 0, spine: -5, chest: -8, neck: -20, arm: 167, elbow: 0, hip: 0, knee: 0, foot: 0 });
+const UTTANA = sym({ lean: 95, spine: 25, chest: 20, neck: 10, arm: 150, elbow: 0, hip: 95, knee: 0, foot: 0 });
+const ARDHA_UTTANA = sym({ lean: 80, spine: 0, chest: -5, neck: -20, arm: 75, elbow: 0, hip: 80, knee: 0, foot: 0 });
+const CHATURANGA = sym({ lean: 88, spine: 0, chest: 0, neck: -5, arm: 8, elbow: 80, hip: 0, knee: 0, foot: 80 });
+const URDHVA_MUKHA = sym({ lean: 75, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: -5, knee: 0, foot: 170 });
+const ADHO_MUKHA = sym({ lean: 125, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 85, knee: 0, foot: 0 });
 
 const IDS = {
-  pranam: ["pectoralis", "rhomboid_major", "longissimus", "transversus"],
-  hasta: ["deltoid", "latissimus", "serratus", "rectus_abdominis", "longissimus", "iliopsoas", "trapezius"],
-  padahasta: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "gluteus_max", "longissimus"],
-  ashwa: ["iliopsoas", "rectus_femoris", "gluteus_max", "vastus_medialis", "vastus_lateralis", "adductor_longus", "longissimus"],
-  parvata: ["deltoid", "latissimus", "triceps", "serratus", "gastrocnemius", "soleus", "biceps_femoris", "semitendinosus"],
-  ashtanga: ["triceps", "pectoralis", "serratus", "deltoid", "rectus_abdominis"],
-  bhujanga: ["longissimus", "iliocostalis", "multifidus", "gluteus_max", "triceps", "trapezius", "rectus_abdominis"],
+  sama: ["rectus_femoris", "vastus_medialis", "gluteus_med", "transversus", "longissimus"],
+  urdhvaHasta: ["deltoid", "latissimus", "serratus", "trapezius", "rectus_abdominis", "longissimus"],
+  uttana: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "gluteus_max", "longissimus"],
+  ardha: ["longissimus", "iliocostalis", "multifidus", "biceps_femoris", "semitendinosus", "gastrocnemius"],
+  chaturanga: ["triceps", "pectoralis", "serratus", "deltoid", "rectus_abdominis", "transversus", "rectus_femoris"],
+  urdhvaMukha: ["triceps", "longissimus", "iliocostalis", "gluteus_max", "trapezius", "rectus_abdominis", "iliopsoas"],
+  adhoMukha: ["deltoid", "latissimus", "triceps", "serratus", "gastrocnemius", "soleus", "biceps_femoris", "semitendinosus"],
 };
 
+// 아쉬탕가 수리야나마스카라 A — 빈야사 카운트(에캄~나바)와 호흡
+const P = (ko, sa, note, breath, pose, ids) => ({ ko, sa, note, breath, pose, ids });
 export const SUN_POSES = [
-  { ko: "프라나마사나", sa: "Pranamasana", note: "기도 자세", breath: "날숨", pose: PRANAM, ids: IDS.pranam },
-  { ko: "하스타 우타나사나", sa: "Hasta Uttanasana", note: "팔 들어 뒤로 젖히기", breath: "들숨", pose: HASTA, ids: IDS.hasta },
-  { ko: "파다하스타사나", sa: "Padahastasana", note: "앞으로 숙여 손을 발 옆에", breath: "날숨", pose: PADAHASTA, ids: IDS.padahasta },
-  { ko: "아쉬와 산찰라나사나", sa: "Ashwa Sanchalanasana", note: "오른발 뒤로 · 기마 자세", breath: "들숨", pose: mirror(ASHWA_PX_BACK), ids: IDS.ashwa },
-  { ko: "파르바타사나", sa: "Parvatasana", note: "산 자세", breath: "날숨", pose: PARVATA, ids: IDS.parvata },
-  { ko: "아쉬탕가 나마스카라", sa: "Ashtanga Namaskara", note: "무릎·가슴·턱을 바닥에", breath: "숨 멈춤", pose: ASHTANGA, ids: IDS.ashtanga },
-  { ko: "부장가사나", sa: "Bhujangasana", note: "코브라", breath: "들숨", pose: BHUJANGA, ids: IDS.bhujanga },
-  { ko: "파르바타사나", sa: "Parvatasana", note: "산 자세", breath: "날숨", pose: PARVATA, ids: IDS.parvata },
-  { ko: "아쉬와 산찰라나사나", sa: "Ashwa Sanchalanasana", note: "오른발 앞으로 · 기마 자세", breath: "들숨", pose: ASHWA_PX_BACK, ids: IDS.ashwa },
-  { ko: "파다하스타사나", sa: "Padahastasana", note: "앞으로 숙이기", breath: "날숨", pose: PADAHASTA, ids: IDS.padahasta },
-  { ko: "하스타 우타나사나", sa: "Hasta Uttanasana", note: "팔 들어 뒤로 젖히기", breath: "들숨", pose: HASTA, ids: IDS.hasta },
-  { ko: "프라나마사나", sa: "Pranamasana", note: "기도 자세", breath: "날숨", pose: PRANAM, ids: IDS.pranam },
+  P("사마스티티", "Samasthitih", "준비 · 바르게 서기", "자연 호흡", SAMA, IDS.sama),
+  P("우르드바 하스타사나", "Urdhva Hastasana", "에캄 · 팔 들어 올리기", "들숨", URDHVA_HASTA, IDS.urdhvaHasta),
+  P("우타나사나", "Uttanasana", "드베 · 앞으로 숙이기", "날숨", UTTANA, IDS.uttana),
+  P("아르다 우타나사나", "Ardha Uttanasana", "트리니 · 등 펴고 반쯤 들기", "들숨", ARDHA_UTTANA, IDS.ardha),
+  P("차투랑가 단다아사나", "Chaturanga Dandasana", "차트바리 · 뒤로 점프, 팔 굽혀 내려가기", "날숨", CHATURANGA, IDS.chaturanga),
+  P("우르드바 무카 스바나사나", "Urdhva Mukha Svanasana", "판차 · 업독", "들숨", URDHVA_MUKHA, IDS.urdhvaMukha),
+  P("아도 무카 스바나사나", "Adho Mukha Svanasana", "샷 · 다운독, 5호흡", "날숨", ADHO_MUKHA, IDS.adhoMukha),
+  P("아르다 우타나사나", "Ardha Uttanasana", "삽타 · 앞으로 점프, 등 펴기", "들숨", ARDHA_UTTANA, IDS.ardha),
+  P("우타나사나", "Uttanasana", "아쉬타우 · 앞으로 숙이기", "날숨", UTTANA, IDS.uttana),
+  P("우르드바 하스타사나", "Urdhva Hastasana", "나바 · 팔 들며 일어서기", "들숨", URDHVA_HASTA, IDS.urdhvaHasta),
+  P("사마스티티", "Samasthitih", "마무리 · 바르게 서기", "날숨", SAMA, IDS.sama),
 ];
 
 // ── 마네킹 ───────────────────────────────────────────────────────────────
