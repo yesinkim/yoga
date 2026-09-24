@@ -6,6 +6,7 @@ import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@
 import * as THREE from "three";
 import { SunPanel, SUN_POSES, toRaw, ease } from "./SunSalutation.jsx";
 import { buildPoseRig, BONE_KEYS } from "./poseRig.js";
+import { FeedbackButton, FeedbackDialog } from "./Feedback.jsx";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
@@ -571,6 +572,7 @@ export default function App() {
     setFocus({ kind: "sun", title: s.ko, sub: `${sunStep + 1}/${SUN_POSES.length} · ${s.breath}`, ids: new Set(s.ids), list });
   }, [sunOn, sunStep]);
   const clearFocus = useCallback(() => { setFocus(null); setSunOn(false); }, []);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // ── 카메라: 근육 찾아가기 / 처음 시점 ──
   const homeRef = useRef(null);            // Rig가 정한 정면 거리
@@ -670,7 +672,7 @@ export default function App() {
   void peelHoverTick;
 
   return (
-    <div className={"wrap" + (sunOn ? " sun-on" : "")} style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
+    <div className={"wrap" + (sunOn ? " sun-on" : "") + (focus ? " has-focus" : "")} style={{ cursor: panHeld ? "grab" : hovering ? (peelMode ? "crosshair" : "pointer") : "default" }}>
       <Canvas camera={{ position: [0, 0, 4], fov: 38, near: 0.01, far: 5000 }}
         gl={{ alpha: true, antialias: true }}
         onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.toneMappingExposure = 0.98; }}
@@ -716,6 +718,12 @@ export default function App() {
       </div>
 
       <MuscleSearch muscles={MUSCLES} onSelect={pickFromList} />
+
+      <FeedbackButton onOpen={() => setFeedbackOpen(true)} />
+      {feedbackOpen && (
+        <FeedbackDialog onClose={() => setFeedbackOpen(false)}
+          context={sunOn ? `수리야나마스카라 A · ${SUN_POSES[sunStep].ko}` : selected?.ko || ""} />
+      )}
 
       {viewMoved && (
         <button className="view-reset" onClick={resetView} title="처음 시점으로 돌아가기">⟲ 처음 시점</button>
