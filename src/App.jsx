@@ -214,7 +214,7 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
       if (restDist.current == null) restDist.current = camera.position.distanceTo(controls.target);
       // 세로로 좁은 화면(모바일)에서도 옆으로 긴 자세(다운독 등)가 다 들어오게 화면 비율로 거리 계산
       const v = Math.tan((camera.fov * Math.PI) / 360);
-      const d = Math.max(1.15 / v, 1.05 / (v * camera.aspect));
+      const d = Math.max(1.4 / v, 1.05 / (v * camera.aspect));
       camera.position.set(d * 0.8, d * 0.1, d * 0.58);
     } else if (restDist.current != null) {
       camera.position.set(0, 0, restDist.current);
@@ -231,7 +231,9 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
     cur.current = c;
     rig.current.apply(c);
     if (controls) { // 자세 중심을 따라 시선 높이를 옮긴다(궤도 각도는 유지)
-      const ty = active ? rig.current.worldCenter().y : 0;
+      // 위쪽 상단 바에 가리지 않게 시선을 자세 중심보다 살짝 위로 → 모델이 화면에서 조금 아래로
+      const lift = camera.position.distanceTo(controls.target) * Math.tan((camera.fov * Math.PI) / 360) * 0.14;
+      const ty = active ? rig.current.worldCenter().y + lift : 0;
       const dy = (ty - controls.target.y) * Math.min(1, dt * 4);
       controls.target.y += dy; camera.position.y += dy;
       controls.update();
@@ -579,7 +581,7 @@ export default function App() {
   const toggleSun = useCallback(() => {
     setSunOn((on) => {
       if (on) { setFocus(null); return false; }
-      setSunStep(0); setSunPlaying(true);
+      setSunStep(0); setSunPlaying(true); setFbCollapsed(true);
       setSelected(null); setMuscleOn(true); setBoneOn(false);
       return true;
     });
@@ -596,6 +598,7 @@ export default function App() {
     });
   }, [sunOn, sunStep]);
   const clearFocus = useCallback(() => { setFocus(null); setSunOn(false); }, []);
+  const [fbCollapsed, setFbCollapsed] = useState(false); // 상단 강조 바 접기
   const [pulseOn, setPulseOn] = useState(true); // 수축 근육 맥박 애니메이션(보고 뺄지 결정)
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   // 관리 페이지: 주소에 ?feedback 이 있으면 받은 피드백 목록
@@ -610,7 +613,7 @@ export default function App() {
   useEffect(() => { setViewMoved(false); }, [sunOn]);
   const sideView = (cam) => { // 태양경배 옆(3/4) 시점 — AnatomyPoser와 같은 계산
     const v = Math.tan((cam.fov * Math.PI) / 360);
-    const d = Math.max(1.15 / v, 1.05 / (v * cam.aspect));
+    const d = Math.max(1.4 / v, 1.05 / (v * cam.aspect));
     return new THREE.Vector3(d * 0.8, d * 0.1, d * 0.58);
   };
   const resetView = useCallback(() => {
@@ -760,15 +763,25 @@ export default function App() {
       )}
 
       {focus && (
-        <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : focus.kind === "sun" ? " sun" : "")}>
+        <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : focus.kind === "sun" ? " sun" : "") + (fbCollapsed ? " collapsed" : "")}>
           <div className="fb-head">
             <span className="fb-kind">
               {focus.kind === "breath" ? "호흡근 모드" : focus.kind === "sun" ? "☀️ 수리야나마스카라 A" : "아사나 동원 근육"}
             </span>
             <strong>{focus.title}</strong>
             {focus.sub && <i>{focus.sub}</i>}
-            <span className="fb-count">{focus.list.length}</span>
-            <button className="fb-x" onClick={clearFocus} aria-label="강조 해제">✕ 해제</button>
+            {focus.kind === "sun" ? (
+              <span className="fb-rolecount">
+                <b className="c">수축 {focus.contract.length}</b>
+                {focus.stretch.length > 0 && <b className="s">신장 {focus.stretch.length}</b>}
+              </span>
+            ) : <span className="fb-count">{focus.list.length}</span>}
+            <span className="fb-btns">
+              <button className="fb-fold" onClick={() => setFbCollapsed((v) => !v)}
+                aria-expanded={!fbCollapsed}>{fbCollapsed ? "▾ 근육 보기" : "▴ 접기"}</button>
+              <button className="fb-x" onClick={clearFocus}
+                aria-label={focus.kind === "sun" ? "태양경배 종료" : "강조 해제"}>✕ {focus.kind === "sun" ? "종료" : "해제"}</button>
+            </span>
           </div>
           {focus.kind === "sun" ? (
             <div className="fb-muscles fb-roles">

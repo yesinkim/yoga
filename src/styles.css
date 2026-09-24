@@ -152,7 +152,21 @@ canvas{touch-action:none;}
 .fb-count{font-size:11px;font-weight:700;color:var(--jade-deep);background:rgba(93,138,114,.16);
   border-radius:20px;padding:1px 8px;}
 .fb-count::before{content:"근육 ";font-weight:500;}
-.fb-x{margin-left:auto;border:none;background:rgba(125,107,80,.12);color:var(--sepia);font-size:12px;
+.fb-btns{margin-left:auto;display:flex;gap:6px;}
+.fb-fold{border:none;background:rgba(93,138,114,.14);color:var(--jade-deep);font-family:inherit;font-size:12px;
+  font-weight:600;border-radius:8px;padding:5px 9px;cursor:pointer;white-space:nowrap;}
+.fb-fold:hover{background:rgba(93,138,114,.24);}
+.focus-bar.collapsed .fb-muscles{display:none;}
+.focus-bar.collapsed .fb-kind{display:none;}
+.focus-bar.collapsed .fb-head{flex-wrap:nowrap;align-items:center;}
+.focus-bar.collapsed .fb-head strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.focus-bar.collapsed .fb-head i{white-space:nowrap;}
+.focus-bar.collapsed{padding-top:9px;padding-bottom:9px;}
+.fb-rolecount{display:flex;gap:5px;flex:none;}
+.fb-rolecount b{white-space:nowrap;font-size:11px;font-weight:700;border-radius:20px;padding:1px 8px;color:#fff;}
+.fb-rolecount b.c{background:#ff6a2b;}
+.fb-rolecount b.s{background:#2f9bff;}
+.fb-x{border:none;background:rgba(125,107,80,.12);color:var(--sepia);font-size:12px;
   border-radius:8px;padding:5px 9px;cursor:pointer;white-space:nowrap;}
 .fb-x:hover{background:rgba(125,107,80,.22);}
 .fb-muscles{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
@@ -392,6 +406,7 @@ canvas{touch-action:none;}
   .fb-open{left:auto;right:12px;bottom:auto;top:60px;padding:0;width:38px;height:38px;justify-content:center;font-size:16px;}
   .fb-open .fb-open-t{display:none;}
   .wrap.has-focus .fb-open{display:none;}
+  .focus-bar.sun.collapsed .fb-head strong{display:none;} /* 이름은 아래 컨트롤 바에 있음 */
   .masthead h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .view-reset{bottom:138px;}
   .wrap.sun-on .view-reset{bottom:84px;}
