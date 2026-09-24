@@ -10,6 +10,8 @@ import { FeedbackButton, FeedbackDialog, FeedbackAdmin } from "./Feedback.jsx";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
+const CONTRACT = new THREE.Color("#ff6a2b"); // 수축(힘 쓰는 근육) — 주황
+const STRETCH = new THREE.Color("#2f9bff");  // 신장(늘어나는 근육) — 파랑
 const PEEL_GHOST = new THREE.Color("#c86b5a"); // 벗기기 미리보기(호버) 붉은 기
 // three는 visible=false 여도 raycast 하므로, 숨긴 메시는 raycast 자체를 꺼서
 // 클릭이 통과해 안쪽 근육이 잡히게 한다. 복원 시 원래 raycast로 되돌린다.
@@ -268,6 +270,19 @@ function CameraDirector({ apiRef, onUserMove }) {
   return null;
 }
 
+// 태양경배 수축 근육 맥박 — applyView가 userData.pulse를 켠 메시의 발광 세기를 출렁이게
+function Pulse({ layersRef }) {
+  useFrame(({ clock }) => {
+    const meshes = layersRef.current.muscle?.meshes;
+    if (!meshes) return;
+    const k = 0.5 + 0.5 * Math.sin(clock.elapsedTime * 3.2); // 약 2초에 한 번
+    for (const m of meshes) {
+      if (m.userData.pulse) m.material.emissiveIntensity = 0.25 + 0.75 * k;
+    }
+  });
+  return null;
+}
+
 // 목표 불투명도(userData.tOpacity)로 매 프레임 부드럽게 수렴 → 벗기기·레이어 전환이 페이드로
 function Tween({ layersRef }) {
   useFrame((_, dt) => {
@@ -320,7 +335,7 @@ function setTarget(m, op) {
   m.userData.tOpacity = op;
   m.material.depthWrite = op > 0.6;
 }
-function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
+function applyView(layers, vis, selectedId, focusIds, hidden, peelHover, focusRole, pulse) {
   const focusing = focusIds && focusIds.size > 0;
   const deeperThanSurface = vis.muscle || vis.skeleton;
 
@@ -357,10 +372,11 @@ function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
       if (key === "muscle") m.raycast = m.isSkinnedMesh ? SKIN_RAYCAST : MESH_RAYCAST;
       let op = base;
       let hl = false;
+      let role = null; // 태양경배: "c" 수축 / "s" 신장
       if (key === "muscle") {
         const id = m.userData.muscleId;
         if (focusing) {
-          if (id && focusIds.has(id)) { op = Math.max(base, 0.95); hl = true; }
+          if (id && focusIds.has(id)) { op = Math.max(base, 0.95); hl = true; role = focusRole?.get(id) || null; }
           else { op = base * 0.07; }
         } else if (selectedId) {
           if (id === selectedId) { op = Math.max(base, 0.95); hl = true; } // 선택 근육 강조
@@ -371,8 +387,12 @@ function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
       const ghost = key === "muscle" && peelHover && m === peelHover;
       if (ghost) op = Math.min(op, 0.16);
       setTarget(m, op);
+      m.userData.pulse = !!(pulse && role === "c" && selectedId !== m.userData.muscleId); // 수축 근육만 맥박
       if (m.material.emissive) {
-        if (hl) {
+        if (hl && role && selectedId !== m.userData.muscleId) {
+          m.material.emissive.copy(role === "c" ? CONTRACT : STRETCH);
+          m.material.emissiveIntensity = role === "c" ? 0.6 : 0.8;
+        } else if (hl) {
           m.material.emissive.copy(HIGHLIGHT);
           m.material.emissiveIntensity = 0.6;
         } else if (ghost) {
@@ -567,11 +587,16 @@ export default function App() {
   useEffect(() => {
     if (!sunOn) return;
     const s = SUN_POSES[sunStep];
-    const list = MUSCLES.filter((m) => s.ids.includes(m.id))
-      .sort((a, b) => s.ids.indexOf(a.id) - s.ids.indexOf(b.id));
-    setFocus({ kind: "sun", title: s.ko, sub: `${sunStep + 1}/${SUN_POSES.length} · ${s.breath}`, ids: new Set(s.ids), list });
+    const pick = (ids) => ids.map((id) => MUSCLES.find((m) => m.id === id)).filter(Boolean);
+    const role = new Map([...s.contract.map((id) => [id, "c"]), ...s.stretch.map((id) => [id, "s"])]);
+    setFocus({
+      kind: "sun", title: s.ko, sub: `${sunStep + 1}/${SUN_POSES.length} · ${s.breath}`,
+      ids: new Set(s.ids), list: [...pick(s.contract), ...pick(s.stretch)], role,
+      contract: pick(s.contract), stretch: pick(s.stretch),
+    });
   }, [sunOn, sunStep]);
   const clearFocus = useCallback(() => { setFocus(null); setSunOn(false); }, []);
+  const [pulseOn, setPulseOn] = useState(true); // 수축 근육 맥박 애니메이션(보고 뺄지 결정)
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   // 관리 페이지: 주소에 ?feedback 이 있으면 받은 피드백 목록
   const [feedbackAdmin, setFeedbackAdmin] = useState(() =>
@@ -660,8 +685,8 @@ export default function App() {
   // 레이어 토글 / selected / focus / 벗기기 / 레이어 변동 시 머티리얼 갱신
   useEffect(() => {
     applyView(layersRef.current, { surface: surfaceOn, fascia: fasciaOn, muscle: muscleOn, skeleton: boneOn },
-      selected?.id, focus?.ids, hiddenRef.current, peelHoverRef.current);
-  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, peelCount, ready, peelHoverTick]);
+      selected?.id, focus?.ids, hiddenRef.current, peelHoverRef.current, focus?.role, pulseOn);
+  }, [surfaceOn, fasciaOn, muscleOn, boneOn, selected, focus, peelCount, ready, peelHoverTick, pulseOn]);
 
   const layerCount = LAYER_ORDER.filter((k) => layersRef.current[k]).length;
   // 화면 맞춤은 근육·뼈가 들어올 때만(나중에 피부가 로드돼도 카메라가 튀지 않게)
@@ -694,6 +719,7 @@ export default function App() {
             fitKey={coreLoaded} layers={loadLayers} homeRef={homeRef} />
         </Suspense>
         <Tween layersRef={layersRef} />
+        <Pulse layersRef={layersRef} />
         <AnatomyPoser layersRef={layersRef} active={sunOn} pose={SUN_POSES[sunStep].pose}
           ready={ready} onState={setPoseState} />
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
@@ -744,12 +770,29 @@ export default function App() {
             <span className="fb-count">{focus.list.length}</span>
             <button className="fb-x" onClick={clearFocus} aria-label="강조 해제">✕ 해제</button>
           </div>
-          <div className="fb-muscles">
-            {focus.list.map((m) => (
-              <button key={m.id} className={"fb-chip" + (selected?.id === m.id ? " on" : "")}
-                onClick={() => pickFromList(m)}>{m.ko}</button>
-            ))}
-          </div>
+          {focus.kind === "sun" ? (
+            <div className="fb-muscles fb-roles">
+              <span className="fb-legend c">수축</span>
+              {focus.contract.map((m) => (
+                <button key={m.id} className={"fb-chip c" + (selected?.id === m.id ? " on" : "")}
+                  onClick={() => pickFromList(m)}>{m.ko}</button>
+              ))}
+              {focus.stretch.length > 0 && <span className="fb-legend s">신장</span>}
+              {focus.stretch.map((m) => (
+                <button key={m.id} className={"fb-chip s" + (selected?.id === m.id ? " on" : "")}
+                  onClick={() => pickFromList(m)}>{m.ko}</button>
+              ))}
+              <button className={"fb-pulse" + (pulseOn ? " on" : "")} onClick={() => setPulseOn((v) => !v)}
+                title="수축 근육이 맥박처럼 밝아졌다 어두워지는 효과">✨ 맥박 {pulseOn ? "켬" : "끔"}</button>
+            </div>
+          ) : (
+            <div className="fb-muscles">
+              {focus.list.map((m) => (
+                <button key={m.id} className={"fb-chip" + (selected?.id === m.id ? " on" : "")}
+                  onClick={() => pickFromList(m)}>{m.ko}</button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -37,30 +37,53 @@ const CHATURANGA = sym({ lean: 88, spine: 0, chest: 0, neck: -5, arm: 8, elbow: 
 const URDHVA_MUKHA = sym({ lean: 75, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: -5, knee: 0, foot: 170 });
 const ADHO_MUKHA = sym({ lean: 125, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 85, knee: 0, foot: 0 });
 
-const IDS = {
-  sama: ["rectus_femoris", "vastus_medialis", "gluteus_med", "transversus", "longissimus"],
-  urdhvaHasta: ["deltoid", "latissimus", "serratus", "trapezius", "rectus_abdominis", "longissimus"],
-  uttana: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "gluteus_max", "longissimus"],
-  ardha: ["longissimus", "iliocostalis", "multifidus", "biceps_femoris", "semitendinosus", "gastrocnemius"],
-  chaturanga: ["triceps", "pectoralis", "serratus", "deltoid", "rectus_abdominis", "transversus", "rectus_femoris"],
-  urdhvaMukha: ["triceps", "longissimus", "iliocostalis", "gluteus_max", "trapezius", "rectus_abdominis", "iliopsoas"],
-  adhoMukha: ["deltoid", "latissimus", "triceps", "serratus", "gastrocnemius", "soleus", "biceps_femoris", "semitendinosus"],
+// 동작별 근육 역할 — c: 수축(힘을 쓰는 근육), s: 신장(늘어나는 근육)
+const ROLE = {
+  sama: {
+    c: ["rectus_femoris", "vastus_medialis", "vastus_lateralis", "gluteus_med", "transversus", "longissimus"],
+    s: [],
+  },
+  urdhvaHasta: {
+    c: ["deltoid", "trapezius", "serratus", "triceps", "longissimus"],
+    s: ["latissimus", "pectoralis", "rectus_abdominis", "external_oblique"],
+  },
+  uttana: {
+    c: ["rectus_femoris", "vastus_medialis", "vastus_lateralis", "iliopsoas"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "gluteus_max", "longissimus", "iliocostalis"],
+  },
+  ardha: {
+    c: ["longissimus", "iliocostalis", "multifidus", "rhomboid_major", "trapezius", "rectus_femoris"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius"],
+  },
+  chaturanga: {
+    c: ["triceps", "pectoralis", "serratus", "deltoid", "rectus_abdominis", "transversus", "external_oblique", "rectus_femoris", "vastus_medialis"],
+    s: [],
+  },
+  urdhvaMukha: {
+    c: ["triceps", "longissimus", "iliocostalis", "multifidus", "gluteus_max", "trapezius", "rhomboid_major", "vastus_lateralis"],
+    s: ["rectus_abdominis", "external_oblique", "iliopsoas", "rectus_femoris", "pectoralis"],
+  },
+  adhoMukha: {
+    c: ["deltoid", "triceps", "serratus", "trapezius", "rectus_femoris", "vastus_medialis", "transversus"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "latissimus"],
+  },
 };
 
-// 아쉬탕가 수리야나마스카라 A — 빈야사 카운트(에캄~나바)와 호흡
-const P = (ko, sa, note, breath, pose, ids) => ({ ko, sa, note, breath, pose, ids });
+// 아쉬탕가 수리야나마스카라 A — 빈야사 카운트(에캄~나바)와 호흡, 동작별 수축·신장 근육
+const P = (ko, sa, note, breath, pose, role) =>
+  ({ ko, sa, note, breath, pose, contract: role.c, stretch: role.s, ids: [...role.c, ...role.s] });
 export const SUN_POSES = [
-  P("사마스티티", "Samasthitih", "준비 · 바르게 서기", "자연 호흡", SAMA, IDS.sama),
-  P("우르드바 하스타사나", "Urdhva Hastasana", "에캄 · 팔 들어 올리기", "들숨", URDHVA_HASTA, IDS.urdhvaHasta),
-  P("우타나사나", "Uttanasana", "드베 · 앞으로 숙이기", "날숨", UTTANA, IDS.uttana),
-  P("아르다 우타나사나", "Ardha Uttanasana", "트리니 · 등 펴고 반쯤 들기", "들숨", ARDHA_UTTANA, IDS.ardha),
-  P("차투랑가 단다아사나", "Chaturanga Dandasana", "차트바리 · 뒤로 점프, 팔 굽혀 내려가기", "날숨", CHATURANGA, IDS.chaturanga),
-  P("우르드바 무카 스바나사나", "Urdhva Mukha Svanasana", "판차 · 업독", "들숨", URDHVA_MUKHA, IDS.urdhvaMukha),
-  P("아도 무카 스바나사나", "Adho Mukha Svanasana", "샷 · 다운독, 5호흡", "날숨", ADHO_MUKHA, IDS.adhoMukha),
-  P("아르다 우타나사나", "Ardha Uttanasana", "삽타 · 앞으로 점프, 등 펴기", "들숨", ARDHA_UTTANA, IDS.ardha),
-  P("우타나사나", "Uttanasana", "아쉬타우 · 앞으로 숙이기", "날숨", UTTANA, IDS.uttana),
-  P("우르드바 하스타사나", "Urdhva Hastasana", "나바 · 팔 들며 일어서기", "들숨", URDHVA_HASTA, IDS.urdhvaHasta),
-  P("사마스티티", "Samasthitih", "마무리 · 바르게 서기", "날숨", SAMA, IDS.sama),
+  P("사마스티티", "Samasthitih", "준비 · 바르게 서기", "자연 호흡", SAMA, ROLE.sama),
+  P("우르드바 하스타사나", "Urdhva Hastasana", "에캄 · 팔 들어 올리기", "들숨", URDHVA_HASTA, ROLE.urdhvaHasta),
+  P("우타나사나", "Uttanasana", "드베 · 앞으로 숙이기", "날숨", UTTANA, ROLE.uttana),
+  P("아르다 우타나사나", "Ardha Uttanasana", "트리니 · 등 펴고 반쯤 들기", "들숨", ARDHA_UTTANA, ROLE.ardha),
+  P("차투랑가 단다아사나", "Chaturanga Dandasana", "차트바리 · 뒤로 점프, 팔 굽혀 내려가기", "날숨", CHATURANGA, ROLE.chaturanga),
+  P("우르드바 무카 스바나사나", "Urdhva Mukha Svanasana", "판차 · 업독", "들숨", URDHVA_MUKHA, ROLE.urdhvaMukha),
+  P("아도 무카 스바나사나", "Adho Mukha Svanasana", "샷 · 다운독, 5호흡", "날숨", ADHO_MUKHA, ROLE.adhoMukha),
+  P("아르다 우타나사나", "Ardha Uttanasana", "삽타 · 앞으로 점프, 등 펴기", "들숨", ARDHA_UTTANA, ROLE.ardha),
+  P("우타나사나", "Uttanasana", "아쉬타우 · 앞으로 숙이기", "날숨", UTTANA, ROLE.uttana),
+  P("우르드바 하스타사나", "Urdhva Hastasana", "나바 · 팔 들며 일어서기", "들숨", URDHVA_HASTA, ROLE.urdhvaHasta),
+  P("사마스티티", "Samasthitih", "마무리 · 바르게 서기", "날숨", SAMA, ROLE.sama),
 ];
 
 // ── 마네킹 ───────────────────────────────────────────────────────────────
