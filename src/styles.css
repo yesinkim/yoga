@@ -191,7 +191,26 @@ canvas{touch-action:none;}
 .fbk-copy:disabled{opacity:.5;cursor:not-allowed;}
 .fbk-send{background:var(--jade);color:#0e1b14;border:none;}
 .fbk-send.off{opacity:.45;cursor:not-allowed;}
-.fbk-note{margin:10px 0 0;font-size:11.5px;color:#7d6b50;line-height:1.5;word-break:break-all;}
+.fbk-send:disabled{opacity:.45;cursor:not-allowed;}
+.fbk-trap{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;}
+.fbk-err{margin:10px 0 0;font-size:13px;color:#a8413a;}
+.fbk-done{text-align:center;padding:18px 0 4px;}
+.fbk-done p{font-size:15px;line-height:1.7;margin:0 0 16px;}
+.fbk-done .fbk-send{width:100%;}
+.fbk-admin{width:min(640px,100%);}
+.fbk-count{font-size:12px;font-family:"Noto Sans KR",sans-serif;background:var(--jade);color:#0e1b14;
+  border-radius:10px;padding:1px 8px;vertical-align:middle;margin-left:4px;}
+.fbk-keyrow{display:flex;gap:8px;margin:12px 0 4px;}
+.fbk-keyrow input{flex:1;font-family:inherit;font-size:14px;border:1px solid var(--parchment-edge);
+  border-radius:10px;padding:9px 10px;background:#fff;color:var(--ink);}
+.fbk-keyrow .fbk-send{flex:none;padding:9px 16px;}
+.fbk-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:9px;}
+.fbk-list li{background:#fff;border:1px solid var(--parchment-edge);border-radius:12px;padding:10px 12px;}
+.fbk-list p{margin:6px 0 0;font-size:14px;line-height:1.55;white-space:pre-wrap;color:#3f3a2e;}
+.fbk-meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:11.5px;color:var(--sepia);}
+.fbk-meta b{color:var(--jade-deep);background:rgba(93,138,114,.14);border-radius:6px;padding:1px 7px;font-size:11.5px;}
+.fbk-dev{margin-left:auto;}
+.fbk-list .fbk-name{font-size:12.5px;color:var(--sepia);}
 
 /* 처음 시점으로 — 시점을 옮겼을 때만 나타남 */
 .view-reset{position:absolute;z-index:7;left:50%;bottom:38px;transform:translateX(-50%);

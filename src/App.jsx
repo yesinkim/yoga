@@ -6,7 +6,7 @@ import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@
 import * as THREE from "three";
 import { SunPanel, SUN_POSES, toRaw, ease } from "./SunSalutation.jsx";
 import { buildPoseRig, BONE_KEYS } from "./poseRig.js";
-import { FeedbackButton, FeedbackDialog } from "./Feedback.jsx";
+import { FeedbackButton, FeedbackDialog, FeedbackAdmin } from "./Feedback.jsx";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
 const HIGHLIGHT = new THREE.Color("#5d8a72");
@@ -573,6 +573,9 @@ export default function App() {
   }, [sunOn, sunStep]);
   const clearFocus = useCallback(() => { setFocus(null); setSunOn(false); }, []);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // 관리 페이지: 주소에 ?feedback 이 있으면 받은 피드백 목록
+  const [feedbackAdmin, setFeedbackAdmin] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("feedback"));
 
   // ── 카메라: 근육 찾아가기 / 처음 시점 ──
   const homeRef = useRef(null);            // Rig가 정한 정면 거리
@@ -720,6 +723,7 @@ export default function App() {
       <MuscleSearch muscles={MUSCLES} onSelect={pickFromList} />
 
       <FeedbackButton onOpen={() => setFeedbackOpen(true)} />
+      {feedbackAdmin && <FeedbackAdmin onClose={() => setFeedbackAdmin(false)} />}
       {feedbackOpen && (
         <FeedbackDialog onClose={() => setFeedbackOpen(false)}
           context={sunOn ? `수리야나마스카라 A · ${SUN_POSES[sunStep].ko}` : selected?.ko || ""} />
