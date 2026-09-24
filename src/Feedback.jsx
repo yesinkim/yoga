@@ -58,9 +58,13 @@ export function FeedbackDialog({ context, onClose }) {
         ) : (
           <>
             <p className="fbk-sub">틀린 정보, 불편한 점, 있었으면 하는 기능 무엇이든 좋아요.</p>
+            <div className="fbk-wip">
+              <span className="fbk-wip-tag">진행 중</span>
+              <span>동작할 때 근육 수축·신장 표시</span>
+            </div>
             <textarea ref={ta} className="fbk-text" rows={5} value={text} maxLength={4000}
               onChange={(e) => setText(e.target.value)}
-              placeholder="예) 대퇴직근 기시가 교재와 달라요 / 모바일에서 버튼이 작아요" />
+              placeholder="예) 자세가 움직일 때 근육이 수축하는지 신장되는지 보여주세요" />
             <label className="fbk-row">관련 부분
               <input value={about} onChange={(e) => setAbout(e.target.value)} placeholder="근육·자세·화면 (선택)" />
             </label>
