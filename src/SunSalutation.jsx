@@ -31,7 +31,8 @@ const sym = (o) => ({
 const SAMA = sym({ lean: 0, spine: 0, chest: 0, neck: 0, arm: 3, elbow: 5, hip: 0, knee: 0, foot: 0 });
 const URDHVA_HASTA = sym({ lean: 0, spine: -5, chest: -8, neck: -20, arm: 167, elbow: 0, hip: 0, knee: 0, foot: 0 });
 const UTTANA = sym({ lean: 95, spine: 25, chest: 20, neck: 10, arm: 150, elbow: 0, hip: 95, knee: 0, foot: 0 });
-const ARDHA_UTTANA = sym({ lean: 80, spine: 0, chest: -5, neck: -20, arm: 75, elbow: 0, hip: 80, knee: 0, foot: 0 });
+// 등은 평평하게, 손끝은 발 옆 바닥에
+const ARDHA_UTTANA = sym({ lean: 113, spine: 0, chest: 0, neck: -40, arm: 113, elbow: 0, hip: 133, knee: 20, foot: 0 });
 const CHATURANGA = sym({ lean: 88, spine: 0, chest: 0, neck: -5, arm: 8, elbow: 80, hip: 0, knee: 0, foot: 80 });
 const URDHVA_MUKHA = sym({ lean: 75, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: -5, knee: 0, foot: 170 });
 const ADHO_MUKHA = sym({ lean: 125, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 85, knee: 0, foot: 0 });
