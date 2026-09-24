@@ -3,24 +3,34 @@
 //  GET  /api/feedback?key=관리키  → 최근 피드백 목록 (FEEDBACK_ADMIN_KEY 환경변수와 일치해야 함)
 //
 // 필요한 환경변수 (Vercel 프로젝트):
-//  BLOB_READ_WRITE_TOKEN  — Storage에서 Blob 저장소를 만들어 프로젝트에 연결하면 자동으로 들어감
+//  BLOB_READ_WRITE_TOKEN 또는 BLOB_STORE_ID — Storage에서 Blob 저장소를 프로젝트에 연결하면 자동으로 들어감
+//    (최근 연결 방식은 BLOB_STORE_ID + Vercel OIDC 인증을 쓴다)
 //  FEEDBACK_ADMIN_KEY     — 목록을 볼 때 쓸 비밀 키(직접 정함)
 import { put, list, get } from "@vercel/blob";
 
 const PREFIX = "feedback/";
+let CREDS = {}; // 요청마다 설정: 읽기·쓰기 토큰 또는 OIDC
+
+function credsFor(req) {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return {};
+  const storeId = process.env.BLOB_STORE_ID;
+  const oidcToken = req.headers["x-vercel-oidc-token"] || process.env.VERCEL_OIDC_TOKEN;
+  if (storeId && oidcToken) return { storeId, oidcToken };
+  return null;
+}
 const clip = (v, n) => String(v ?? "").trim().slice(0, n);
 
 // 저장소가 비공개(private)면 private, 공개로 만들었으면 public으로 자동 대응
 async function putJson(pathname, data) {
   const body = JSON.stringify(data);
-  const opts = { contentType: "application/json", addRandomSuffix: true };
+  const opts = { contentType: "application/json", addRandomSuffix: true, ...CREDS };
   try { return await put(pathname, body, { ...opts, access: "private" }); }
   catch { return await put(pathname, body, { ...opts, access: "public" }); }
 }
 async function readJson(url) {
   for (const access of ["private", "public"]) {
     try {
-      const r = await get(url, { access });
+      const r = await get(url, { access, ...CREDS });
       if (r?.statusCode === 200) return JSON.parse(await new Response(r.stream).text());
     } catch { /* 다른 access로 재시도 */ }
   }
@@ -37,9 +47,9 @@ async function readBody(req) {
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    return res.status(503).json({ error: "storage_not_configured" });
-  }
+  const creds = credsFor(req);
+  if (!creds) return res.status(503).json({ error: "storage_not_configured" });
+  CREDS = creds;
 
   if (req.method === "POST") {
     const b = await readBody(req);
@@ -59,7 +69,7 @@ export default async function handler(req, res) {
       return res.status(201).json({ ok: true });
     } catch (e) {
       console.error("feedback save failed", e);
-      return res.status(500).json({ error: "save_failed" });
+      return res.status(500).json({ error: "save_failed", detail: String(e?.message || e).slice(0, 200) });
     }
   }
 
@@ -70,7 +80,7 @@ export default async function handler(req, res) {
     const blobs = [];
     let cursor;
     do {
-      const r = await list({ prefix: PREFIX, cursor, limit: 1000 });
+      const r = await list({ prefix: PREFIX, cursor, limit: 1000, ...CREDS });
       blobs.push(...r.blobs);
       cursor = r.hasMore ? r.cursor : undefined;
     } while (cursor);

@@ -26,6 +26,7 @@ export function FeedbackDialog({ context, onClose }) {
   const [name, setName] = useState("");
   const [trap, setTrap] = useState(""); // 봇 방지용 숨은 칸
   const [state, setState] = useState("idle"); // idle | sending | done | error
+  const [why, setWhy] = useState("");
   const ta = useRef(null);
   useEffect(() => { ta.current?.focus(); }, []);
   useEsc(onClose);
@@ -39,8 +40,12 @@ export function FeedbackDialog({ context, onClose }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, about, name, website: trap, page: window.location.href }),
       });
-      setState(r.ok ? "done" : "error");
-    } catch { setState("error"); }
+      if (r.ok) { setState("done"); return; }
+      const j = await r.json().catch(() => ({}));
+      setWhy(j.error === "storage_not_configured" ? "저장소 미연결 — Blob 연결 후 재배포 필요"
+        : j.error ? `${j.error}${j.detail ? ": " + j.detail : ""}` : `서버 응답 ${r.status}${r.status === 404 ? " (서버 함수 없음)" : ""}`);
+      setState("error");
+    } catch { setWhy("네트워크 오류"); setState("error"); }
   };
 
   return (
@@ -73,7 +78,7 @@ export function FeedbackDialog({ context, onClose }) {
             </label>
             <input className="fbk-trap" tabIndex={-1} autoComplete="off" aria-hidden="true"
               value={trap} onChange={(e) => setTrap(e.target.value)} />
-            {state === "error" && <p className="fbk-err">보내지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
+            {state === "error" && <p className="fbk-err">보내지 못했어요. 잠시 후 다시 시도해 주세요.{why && <><br /><small>({why})</small></>}</p>}
             <div className="fbk-actions">
               <button className="fbk-send" onClick={send} disabled={!text.trim() || state === "sending"}>
                 {state === "sending" ? "보내는 중…" : "보내기"}
