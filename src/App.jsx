@@ -149,7 +149,7 @@ function LayerLoader({ url, layerKey, isMuscle, register, onPick, onHover }) {
 
 // 로드된 레이어 전체를 원점에 재중심화 + 카메라를 정면 중앙으로 맞춤
 // (자동 프레이밍이 모델을 화면 위쪽에 잡던 문제 해결)
-function Rig({ children, ready }) {
+function Rig({ children, ready, homeRef }) {
   const ref = useRef();
   const { camera, controls } = useThree();
   useEffect(() => {
@@ -165,6 +165,7 @@ function Rig({ children, ready }) {
     const fov = (camera.fov * Math.PI) / 180;
     const dist = (Math.max(size.y, size.x * 1.4) / 2) / Math.tan(fov / 2) * 1.28;
     camera.position.set(0, 0, dist);
+    if (homeRef) homeRef.current = { dist };
     camera.near = dist / 100;
     camera.far = dist * 100;
     camera.updateProjectionMatrix();
@@ -236,6 +237,36 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
   return null;
 }
 
+// 카메라를 부드럽게 옮긴다(근육 찾아가기·시점 초기화). apiRef.current.flyTo(pos, target)
+function CameraDirector({ apiRef, onUserMove }) {
+  const { camera, controls } = useThree();
+  const anim = useRef(null);
+  useEffect(() => {
+    apiRef.current = {
+      camera, controls,
+      flyTo(pos, target, dur = 0.9) {
+        if (!controls) return;
+        anim.current = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos.clone(), t1: target.clone(), t: 0, dur };
+      },
+    };
+    if (!controls) return;
+    const stop = () => { anim.current = null; onUserMove(); }; // 사용자가 직접 돌리면 애니메이션 중단
+    controls.addEventListener("start", stop);
+    return () => controls.removeEventListener("start", stop);
+  }, [camera, controls, apiRef, onUserMove]);
+  useFrame((_, dt) => {
+    const a = anim.current;
+    if (!a) return;
+    a.t = Math.min(1, a.t + dt / a.dur);
+    const e = ease(a.t);
+    camera.position.lerpVectors(a.p0, a.p1, e);
+    controls.target.lerpVectors(a.t0, a.t1, e);
+    controls.update();
+    if (a.t >= 1) anim.current = null;
+  });
+  return null;
+}
+
 // 목표 불투명도(userData.tOpacity)로 매 프레임 부드럽게 수렴 → 벗기기·레이어 전환이 페이드로
 function Tween({ layersRef }) {
   useFrame((_, dt) => {
@@ -257,9 +288,9 @@ function Tween({ layersRef }) {
   return null;
 }
 
-function Scene({ register, onPick, onHover, present, fitKey, layers }) {
+function Scene({ register, onPick, onHover, present, fitKey, layers, homeRef }) {
   return (
-    <Rig ready={fitKey}>
+    <Rig ready={fitKey} homeRef={homeRef}>
       {layers.map((key) => (
         <Suspense key={key} fallback={null}>
           <LayerBoundary onMissing={() => present(key, false)}>
@@ -292,6 +323,18 @@ function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
   const focusing = focusIds && focusIds.size > 0;
   const deeperThanSurface = vis.muscle || vis.skeleton;
 
+  // 선택한 근육이 작으면(눈·후두·손발 근육 등) 나머지를 더 투명하게 해서 안쪽이 보이게
+  let dimOthers = 0.3;
+  if (selectedId && !focusing && layers.muscle) {
+    let r = 0;
+    for (const m of layers.muscle.meshes) {
+      if (m.userData.muscleId !== selectedId) continue;
+      if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+      r = Math.max(r, m.geometry.boundingSphere.radius * m.matrixWorld.getMaxScaleOnAxis());
+    }
+    if (r > 0 && r < 0.07) dimOthers = 0.12;
+  }
+
   for (const key of LAYER_ORDER) {
     const layer = layers[key];
     if (!layer) continue;
@@ -320,7 +363,7 @@ function applyView(layers, vis, selectedId, focusIds, hidden, peelHover) {
           else { op = base * 0.07; }
         } else if (selectedId) {
           if (id === selectedId) { op = Math.max(base, 0.95); hl = true; } // 선택 근육 강조
-          else { op = base * 0.3; }                                        // 나머지는 디밍해 도드라지게
+          else { op = base * dimOthers; }                                  // 나머지는 디밍해 도드라지게
         }
       }
       // 벗기기 모드에서 호버 중인 근육 → 유령처럼 비쳐 아래 층 미리보기
@@ -529,6 +572,74 @@ export default function App() {
   }, [sunOn, sunStep]);
   const clearFocus = useCallback(() => { setFocus(null); setSunOn(false); }, []);
 
+  // ── 카메라: 근육 찾아가기 / 처음 시점 ──
+  const homeRef = useRef(null);            // Rig가 정한 정면 거리
+  const camApi = useRef(null);
+  const [viewMoved, setViewMoved] = useState(false);
+  const markViewMoved = useCallback(() => setViewMoved(true), []);
+  useEffect(() => { setViewMoved(false); }, [sunOn]);
+  const sideView = (cam) => { // 태양경배 옆(3/4) 시점 — AnatomyPoser와 같은 계산
+    const v = Math.tan((cam.fov * Math.PI) / 360);
+    const d = Math.max(1.15 / v, 1.05 / (v * cam.aspect));
+    return new THREE.Vector3(d * 0.8, d * 0.1, d * 0.58);
+  };
+  const resetView = useCallback(() => {
+    const api = camApi.current;
+    if (!api?.controls) return;
+    const pos = sunOn ? sideView(api.camera) : new THREE.Vector3(0, 0, homeRef.current?.dist || 4);
+    api.flyTo(pos, new THREE.Vector3(0, 0, 0));
+    setViewMoved(false);
+  }, [sunOn]);
+  const focusMuscle = useCallback((id) => {
+    const api = camApi.current;
+    const all = layersRef.current.muscle?.meshes || [];
+    const ms = all.filter((m) => m.userData.muscleId === id && !hiddenRef.current.has(m));
+    if (!api?.controls || !ms.length) return;
+    const box = new THREE.Box3(), sp = new THREE.Sphere(), r3 = new THREE.Vector3();
+    for (const m of ms) {
+      if (m.isSkinnedMesh) { m.computeBoundingSphere(); sp.copy(m.boundingSphere); }
+      else { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); sp.copy(m.geometry.boundingSphere); }
+      sp.applyMatrix4(m.matrixWorld);
+      r3.setScalar(sp.radius);
+      box.expandByPoint(sp.center.clone().add(r3)); box.expandByPoint(sp.center.clone().sub(r3));
+    }
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = box.getSize(new THREE.Vector3()).length() / 2;
+    const cam = api.camera;
+    // 보는 방향: 선 자세면 근육이 몸의 어느 면(앞·뒤·옆)에 있는지로, 자세 중이면 지금 방향 유지
+    let dir = cam.position.clone().sub(api.controls.target).normalize();
+    const h = new THREE.Vector3(center.x, 0, center.z);
+    if (!sunOn && h.length() > 0.03) dir = h.normalize().setY(0.18).normalize();
+    const v = Math.tan((cam.fov * Math.PI) / 360);
+    const d = Math.min(Math.max((radius * 1.7) / v, 0.45), (homeRef.current?.dist || 4) * 0.9);
+    // 카드(데스크톱 오른쪽)·하단 시트(모바일)가 가리지 않게 근육을 비켜서 잡는다
+    const target = center.clone();
+    const right = new THREE.Vector3().crossVectors(dir.clone().negate(), cam.up).normalize();
+    if (window.innerWidth <= 760) target.y -= d * v * 0.4;
+    else target.addScaledVector(right, d * v * cam.aspect * 0.28);
+    api.flyTo(target.clone().addScaledVector(dir, d), target);
+    setViewMoved(true);
+  }, [sunOn]);
+  // 목록(검색·칩)에서 고른 근육은 카메라가 찾아간다. 모델을 직접 클릭한 경우는 이미 보이므로 그대로.
+  const pickFromList = useCallback((m) => {
+    setSelected(m);
+    requestAnimationFrame(() => focusMuscle(m.id));
+  }, [focusMuscle]);
+
+  // 태양경배 중 ← → 로 동작 넘기기
+  useEffect(() => {
+    if (!sunOn) return;
+    const onKey = (e) => {
+      if (e.target instanceof HTMLElement && e.target.matches("input,textarea,select")) return;
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      setSunPlaying(false);
+      setSunStep((i) => (i + (e.key === "ArrowRight" ? 1 : -1) + SUN_POSES.length) % SUN_POSES.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sunOn]);
+
   // 호흡근 모드 토글
   const toggleBreathing = useCallback(() => {
     setSunOn(false);
@@ -575,12 +686,13 @@ export default function App() {
         </Environment>
         <Suspense fallback={null}>
           <Scene register={register} onPick={onPick} onHover={onHover} present={markAbsent}
-            fitKey={coreLoaded} layers={loadLayers} />
+            fitKey={coreLoaded} layers={loadLayers} homeRef={homeRef} />
         </Suspense>
         <Tween layersRef={layersRef} />
         <AnatomyPoser layersRef={layersRef} active={sunOn} pose={SUN_POSES[sunStep].pose}
           ready={ready} onState={setPoseState} />
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
+        <CameraDirector apiRef={camApi} onUserMove={markViewMoved} />
       </Canvas>
 
       {panHeld && <div className="pan-hint">✥ 이동 모드 — 드래그로 위치 이동</div>}
@@ -603,7 +715,11 @@ export default function App() {
         <h1>요가 해부학 레이어 뷰어</h1>
       </div>
 
-      <MuscleSearch muscles={MUSCLES} onSelect={(m) => { setSelected(m); }} />
+      <MuscleSearch muscles={MUSCLES} onSelect={pickFromList} />
+
+      {viewMoved && (
+        <button className="view-reset" onClick={resetView} title="처음 시점으로 돌아가기">⟲ 처음 시점</button>
+      )}
 
       {focus && (
         <div className={"focus-bar" + (focus.kind === "breath" ? " breath" : focus.kind === "sun" ? " sun" : "")}>
@@ -619,7 +735,7 @@ export default function App() {
           <div className="fb-muscles">
             {focus.list.map((m) => (
               <button key={m.id} className={"fb-chip" + (selected?.id === m.id ? " on" : "")}
-                onClick={() => setSelected(m)}>{m.ko}</button>
+                onClick={() => pickFromList(m)}>{m.ko}</button>
             ))}
           </div>
         </div>
@@ -953,7 +1069,7 @@ function LoadingOverlay() {
       <div className="loading-card">
         <div className="spinner" />
         <p>해부 모델 불러오는 중… {Math.round(progress)}%</p>
-        <span>근육·골격 약 12MB (Draco 압축)</span>
+        <span>근육·골격 약 5.6MB</span>
       </div>
     </div>
   );
