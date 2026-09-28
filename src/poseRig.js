@@ -8,7 +8,9 @@ import * as THREE from "three";
 
 const D = Math.PI / 180;
 export const BONE_KEYS = ["root", "spine", "chest", "neck", "shL", "shR", "elL", "elR",
-  "hipL", "hipR", "kneeL", "kneeR", "ankL", "ankR"];
+  "hipL", "hipR", "kneeL", "kneeR", "ankL", "ankR", "clL", "clR"];
+// 팔을 들면 어깨뼈·빗장뼈(어깨띠)도 함께 돈다(견갑상완 리듬 ≈ 2:1) → 팔 회전을 나눠 맡겨 어깨 주변이 덜 찢어지게
+const GIRDLE_SHARE = 0.3;
 
 const _v = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -104,14 +106,18 @@ export function buildPoseRig(layers) {
   const pos = {
     root: J.pelvis, spine: J.L5, chest: J.T12, neck: J.C7,
     shL: J.shL, shR: J.shR, elL: J.elL, elR: J.elR,
+    clL: new THREE.Vector3(-0.04, J.shL.y - 0.03, J.shL.z),  // 어깨띠 회전축(어깨 깊이 — 등 쪽이 크게 휘둘리지 않게)
+    clR: new THREE.Vector3(0.04, J.shR.y - 0.03, J.shR.z),
     hipL: J.hipL, hipR: J.hipR, kneeL: J.kneeL, kneeR: J.kneeR, ankL: J.ankL, ankR: J.ankR,
   };
   const parent = {
-    root: null, spine: "root", chest: "spine", neck: "chest", shL: "chest", shR: "chest",
+    root: null, spine: "root", chest: "spine", neck: "chest", shL: "clL", shR: "clR", clL: "chest", clR: "chest",
     elL: "shL", elR: "shR", hipL: "root", hipR: "root", kneeL: "hipL", kneeR: "hipR", ankL: "kneeL", ankR: "kneeR",
   };
   const B = {};
-  for (const k of BONE_KEYS) {
+  // 부모가 먼저 만들어지도록 깊이 순으로 생성(스켈레톤 인덱스 순서는 BONE_KEYS 그대로)
+  const depth = (k) => (parent[k] ? 1 + depth(parent[k]) : 0);
+  for (const k of [...BONE_KEYS].sort((a, b) => depth(a) - depth(b))) {
     const b = new THREE.Bone(); b.name = "pose_" + k; B[k] = b;
     const p = pos[k].clone();
     if (parent[k]) p.sub(pos[parent[k]]);
@@ -128,7 +134,8 @@ export function buildPoseRig(layers) {
   const segs = [
     [idx.root, J.hipL, J.hipR], [idx.root, J.pelvis, J.L5],
     [idx.spine, J.L5, J.T12],
-    [idx.chest, J.T12, J.C7], [idx.chest, J.C7, mid(J.C7, J.shL, 0.6)], [idx.chest, J.C7, mid(J.C7, J.shR, 0.6)],
+    [idx.chest, J.T12, J.C7],
+    [idx.clL, mid(J.C7, J.shL, 0.3), J.shL], [idx.clR, mid(J.C7, J.shR, 0.3), J.shR],
     [idx.neck, J.C7, J.headTop],
   ];
   for (const S of ["L", "R"]) {
@@ -142,11 +149,12 @@ export function buildPoseRig(layers) {
   const legTop = J.pelvis.y + 0.07;
   const handZoneY = J.pelvis.y + 0.05;          // 골반 아래에선 손 부위(바깥쪽)만 팔에 붙는다
   const handX = Math.abs(J.elR.x) * 0.8;
+  const girdleLow = J.T12.y + (J.C7.y - J.T12.y) * 0.35;
   const side = new Int8Array(BONE_KEYS.length);
   const kind = new Int8Array(BONE_KEYS.length); // 0 몸통, 1 팔, 2 다리
   BONE_KEYS.forEach((k, i) => {
     side[i] = k.endsWith("L") ? -1 : k.endsWith("R") ? 1 : 0;
-    kind[i] = /^(sh|el)/.test(k) ? 1 : /^(hip|knee|ank)/.test(k) ? 2 : 0;
+    kind[i] = /^(sh|el)/.test(k) ? 1 : /^(hip|knee|ank)/.test(k) ? 2 : /^cl/.test(k) ? 3 : 0;
   });
 
   const best = new Float32Array(BONE_KEYS.length);
@@ -183,19 +191,25 @@ export function buildPoseRig(layers) {
         const k = kind[bi], s = side[bi];
         if (k === 1 && (_v.x * s < armX || (_v.y < handZoneY && _v.x * s < handX))) continue; // 허벅지가 손을 따라가지 않게
         if (k === 2 && (_v.x * s < -0.01 || _v.y > legTop)) continue;
+        // 어깨띠: 같은 쪽 위쪽만. 등 한가운데(승모근 안쪽)는 몸통에 남긴다
+        if (k === 3 && (_v.x * s < 0.015 || _v.y < girdleLow || (_v.z < J.C7.z + 0.03 && _v.x * s < armX))) continue;
         const d2 = segD2(_v, a, b);
         if (d2 < best[bi]) best[bi] = d2;
       }
-      // 가장 가까운 두 뼈를 1/d⁴로 섞는다
-      let i1 = 0, i2 = -1;
-      for (let b = 1; b < best.length; b++) if (best[b] < best[i1]) i1 = b;
-      for (let b = 0; b < best.length; b++) if (b !== i1 && (i2 < 0 || best[b] < best[i2])) i2 = b;
-      const w1 = 1 / Math.pow(best[i1] + 1e-5, 2);
-      const w2 = best[i2] === Infinity ? 0 : 1 / Math.pow(best[i2] + 1e-5, 2);
-      const a1 = Math.round((255 * w1) / (w1 + w2));
-      si[i * 4] = i1; si[i * 4 + 1] = i2 < 0 ? 0 : i2;
-      sw[i * 4] = a1; sw[i * 4 + 1] = 255 - a1;
-      votes[i1]++;
+      // 가장 가까운 세 뼈를 1/d³로 섞는다(두 뼈만 쓰면 경계에서 근육이 뚝 끊겨 튄다)
+      const top = [-1, -1, -1];
+      for (let b = 0; b < best.length; b++) {
+        if (best[b] === Infinity) continue;
+        if (top[0] < 0 || best[b] < best[top[0]]) { top[2] = top[1]; top[1] = top[0]; top[0] = b; }
+        else if (top[1] < 0 || best[b] < best[top[1]]) { top[2] = top[1]; top[1] = b; }
+        else if (top[2] < 0 || best[b] < best[top[2]]) top[2] = b;
+      }
+      const w = top.map((b) => (b < 0 ? 0 : 1 / Math.pow(best[b] + 2e-5, 1.5)));
+      const sum = w[0] + w[1] + w[2];
+      const q0 = Math.round((255 * w[0]) / sum), q1 = Math.round((255 * w[1]) / sum);
+      si[i * 4] = top[0]; si[i * 4 + 1] = Math.max(top[1], 0); si[i * 4 + 2] = Math.max(top[2], 0);
+      sw[i * 4] = q0; sw[i * 4 + 1] = q1; sw[i * 4 + 2] = Math.max(0, 255 - q0 - q1);
+      votes[top[0]]++;
     }
     g.setAttribute("skinIndex", new THREE.Uint8BufferAttribute(si, 4));
     g.setAttribute("skinWeight", new THREE.Uint8BufferAttribute(sw, 4, true));
@@ -237,6 +251,11 @@ export function buildPoseRig(layers) {
   // raw(도) → 뼈 회전, 발바닥을 원래 바닥 높이에, 앞뒤 중심 유지
   function apply(raw) {
     for (const k of BONE_KEYS) B[k].rotation.x = (raw[k] || 0) * D;
+    for (const S of ["L", "R"]) { // 팔 회전을 어깨띠와 어깨 관절에 나눠 준다
+      const a = (raw["sh" + S] || 0) * D;
+      B["cl" + S].rotation.x = a * GIRDLE_SHARE;
+      B["sh" + S].rotation.x = a * (1 - GIRDLE_SHARE);
+    }
     B.root.position.copy(pos.root);
     F.updateMatrixWorld(true);
     const m = measure();
