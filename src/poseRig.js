@@ -95,7 +95,7 @@ function segD2(p, a, b) {
   return dx * dx + dy * dy + dz * dz;
 }
 
-export function buildPoseRig(layers) {
+export function buildPoseRig(layers, options = {}) {
   const F = layers.muscle.scene;           // 기준 좌표계 = 근육 glb 씬
   let top = F; while (top.parent) top = top.parent;
   top.updateMatrixWorld(true);
@@ -158,6 +158,89 @@ export function buildPoseRig(layers) {
   });
 
   const best = new Float32Array(BONE_KEYS.length);
+  const NB = BONE_KEYS.length;
+  const acc = new Float32Array(NB);
+  const gated = (k, s, v) =>
+    (k === 1 && (v.x * s < armX || (v.y < handZoneY && v.x * s < handX))) ||   // 허벅지가 손을 따라가지 않게
+    (k === 2 && (v.x * s < -0.01 || v.y > legTop)) ||
+    // 어깨띠: 같은 쪽 위쪽만. 등 한가운데(승모근 안쪽)는 몸통에 남긴다
+    (k === 3 && (v.x * s < 0.015 || v.y < girdleLow || (v.z < J.C7.z + 0.03 && v.x * s < armX)));
+  // 한 점의 거리 기반 웨이트(가까운 세 뼈를 1/d³로) → out[NB]
+  function pointWeights(v, out) {
+    best.fill(Infinity);
+    for (const [bi, a, b] of segs) {
+      if (gated(kind[bi], side[bi], v)) continue;
+      const d2 = segD2(v, a, b);
+      if (d2 < best[bi]) best[bi] = d2;
+    }
+    out.fill(0);
+    const top = [-1, -1, -1];
+    for (let b = 0; b < NB; b++) {
+      if (best[b] === Infinity) continue;
+      if (top[0] < 0 || best[b] < best[top[0]]) { top[2] = top[1]; top[1] = top[0]; top[0] = b; }
+      else if (top[1] < 0 || best[b] < best[top[1]]) { top[2] = top[1]; top[1] = b; }
+      else if (top[2] < 0 || best[b] < best[top[2]]) top[2] = b;
+    }
+    let sum = 0;
+    for (const b of top) if (b >= 0) { out[b] = 1 / Math.pow(best[b] + 2e-5, 1.5); sum += out[b]; }
+    if (sum > 0) for (let b = 0; b < NB; b++) out[b] /= sum;
+  }
+  // 흐린 뒤 섞여 들어온 '허용 안 되는 뼈'(반대쪽 다리 등)는 지운다
+  function allowMask(v, out) {
+    let sum = 0;
+    for (let b = 0; b < NB; b++) { if (out[b] > 0 && gated(kind[b], side[b], v)) out[b] = 0; sum += out[b]; }
+    if (sum > 0) for (let b = 0; b < NB; b++) out[b] /= sum;
+  }
+
+  // ── 공통 웨이트 장: 몸 전체 격자에서 한 번 계산하고 흐려, 모든 메시가 같은 장에서 읽는다 ──
+  // (붙어 있는 근육이 서로 다른 뼈를 따라가 찢어지는 걸 막고, 관절 둘레를 매끄럽게)
+  const H = 0.015, BLUR = 2;
+  const lo = new THREE.Vector3(Math.min(J.handL.x, J.shL.x) - 0.12, J.heelL.y - 0.05, -0.28);
+  const hi = new THREE.Vector3(Math.max(J.handR.x, J.shR.x) + 0.12, J.headTop.y + 0.05, 0.3);
+  const NX = Math.ceil((hi.x - lo.x) / H) + 1, NY = Math.ceil((hi.y - lo.y) / H) + 1, NZ = Math.ceil((hi.z - lo.z) / H) + 1;
+  let field = null;
+  if (options.smooth !== false) {
+    field = new Float32Array(NX * NY * NZ * NB);
+    const c = new THREE.Vector3();
+    for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+      c.set(lo.x + x * H, lo.y + y * H, lo.z + z * H);
+      pointWeights(c, acc);
+      field.set(acc, ((z * NY + y) * NX + x) * NB);
+    }
+    // 축별 상자 흐림(BLUR칸 반경) 두 번 ≈ 부드러운 가우시안
+    const tmp = new Float32Array(field.length);
+    const pass = (src, dst, axis) => {
+      const [sx, sy, sz] = [1, NX, NX * NY];
+      const st = axis === 0 ? sx : axis === 1 ? sy : sz, L = axis === 0 ? NX : axis === 1 ? NY : NZ;
+      for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+        const i0 = (z * NY + y) * NX + x, p = axis === 0 ? x : axis === 1 ? y : z;
+        const o = i0 * NB;
+        for (let b = 0; b < NB; b++) {
+          let s2 = 0, cnt = 0;
+          for (let d = -BLUR; d <= BLUR; d++) {
+            const q = p + d; if (q < 0 || q >= L) continue;
+            s2 += src[(i0 + d * st) * NB + b]; cnt++;
+          }
+          dst[o + b] = s2 / cnt;
+        }
+      }
+    };
+    for (let r = 0; r < 2; r++) { pass(field, tmp, 0); pass(tmp, field, 1); pass(field, tmp, 2); field.set(tmp); }
+  }
+  // 격자 장에서 삼선형 보간
+  function sampleField(v, out) {
+    const fx = Math.min(Math.max((v.x - lo.x) / H, 0), NX - 1.001);
+    const fy = Math.min(Math.max((v.y - lo.y) / H, 0), NY - 1.001);
+    const fz = Math.min(Math.max((v.z - lo.z) / H, 0), NZ - 1.001);
+    const x0 = fx | 0, y0 = fy | 0, z0 = fz | 0, tx = fx - x0, ty = fy - y0, tz = fz - z0;
+    out.fill(0);
+    for (let dz = 0; dz < 2; dz++) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+      const w = (dx ? tx : 1 - tx) * (dy ? ty : 1 - ty) * (dz ? tz : 1 - tz);
+      if (w === 0) continue;
+      const o = (((z0 + dz) * NY + (y0 + dy)) * NX + (x0 + dx)) * NB;
+      for (let b = 0; b < NB; b++) out[b] += field[o + b] * w;
+    }
+  }
   const done = new Map(); // geometry → matrix(중복 공유 지오메트리 처리)
   const all = [];
   // 아직 스키닝 안 된 메시에 웨이트를 계산해 붙인다(나중에 로드된 피부도 여기로)
@@ -186,29 +269,25 @@ export function buildPoseRig(layers) {
     const votes = new Uint32Array(BONE_KEYS.length);
     for (let i = 0; i < n; i++) {
       _v.fromBufferAttribute(P, i).applyMatrix4(_m);
-      best.fill(Infinity);
-      for (const [bi, a, b] of segs) {
-        const k = kind[bi], s = side[bi];
-        if (k === 1 && (_v.x * s < armX || (_v.y < handZoneY && _v.x * s < handX))) continue; // 허벅지가 손을 따라가지 않게
-        if (k === 2 && (_v.x * s < -0.01 || _v.y > legTop)) continue;
-        // 어깨띠: 같은 쪽 위쪽만. 등 한가운데(승모근 안쪽)는 몸통에 남긴다
-        if (k === 3 && (_v.x * s < 0.015 || _v.y < girdleLow || (_v.z < J.C7.z + 0.03 && _v.x * s < armX))) continue;
-        const d2 = segD2(_v, a, b);
-        if (d2 < best[bi]) best[bi] = d2;
+      if (field) sampleField(_v, acc); else pointWeights(_v, acc);
+      allowMask(_v, acc); // 좌우·팔다리 구분은 흐린 뒤에도 지킨다
+      // 가장 큰 네 뼈만 남겨 정규화
+      const top = [-1, -1, -1, -1];
+      for (let b = 0; b < NB; b++) {
+        if (acc[b] <= 0) continue;
+        for (let t = 0; t < 4; t++) {
+          if (top[t] < 0 || acc[b] > acc[top[t]]) { for (let u = 3; u > t; u--) top[u] = top[u - 1]; top[t] = b; break; }
+        }
       }
-      // 가장 가까운 세 뼈를 1/d³로 섞는다(두 뼈만 쓰면 경계에서 근육이 뚝 끊겨 튄다)
-      const top = [-1, -1, -1];
-      for (let b = 0; b < best.length; b++) {
-        if (best[b] === Infinity) continue;
-        if (top[0] < 0 || best[b] < best[top[0]]) { top[2] = top[1]; top[1] = top[0]; top[0] = b; }
-        else if (top[1] < 0 || best[b] < best[top[1]]) { top[2] = top[1]; top[1] = b; }
-        else if (top[2] < 0 || best[b] < best[top[2]]) top[2] = b;
+      if (top[0] < 0) { top[0] = 0; acc[0] = 1; }
+      let sum = 0; for (const b of top) if (b >= 0) sum += acc[b];
+      let used = 0;
+      for (let t = 0; t < 4; t++) {
+        const b = top[t];
+        si[i * 4 + t] = b < 0 ? 0 : b;
+        const q = t === 3 ? Math.max(0, 255 - used) : b < 0 ? 0 : Math.round((255 * acc[b]) / sum);
+        sw[i * 4 + t] = q; used += q;
       }
-      const w = top.map((b) => (b < 0 ? 0 : 1 / Math.pow(best[b] + 2e-5, 1.5)));
-      const sum = w[0] + w[1] + w[2];
-      const q0 = Math.round((255 * w[0]) / sum), q1 = Math.round((255 * w[1]) / sum);
-      si[i * 4] = top[0]; si[i * 4 + 1] = Math.max(top[1], 0); si[i * 4 + 2] = Math.max(top[2], 0);
-      sw[i * 4] = q0; sw[i * 4 + 1] = q1; sw[i * 4 + 2] = Math.max(0, 255 - q0 - q1);
       votes[top[0]]++;
     }
     g.setAttribute("skinIndex", new THREE.Uint8BufferAttribute(si, 4));
