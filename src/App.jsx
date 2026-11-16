@@ -179,11 +179,13 @@ function Rig({ children, ready, homeRef }) {
 
 // 태양경배 중엔 해부 모델 자체를 굽힌다. 처음 켤 때 한 번 자동 스키닝(1~2초).
 const REST_RAW = Object.fromEntries(BONE_KEYS.map((k) => [k, 0]));
-function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
+function AnatomyPoser({ layersRef, active, pose, roles, ready, onState }) {
   const rig = useRef(null);
   const cur = useRef(REST_RAW), from = useRef(REST_RAW), to = useRef(REST_RAW), t = useRef(1);
   const [built, setBuilt] = useState(false);
   const { camera, controls } = useThree();
+  const rolesRef = useRef(null); rolesRef.current = active ? roles : null;
+  const act = useRef(0); // 수축 힘 표시 세기(동작이 바뀔 때 0→1로 차오름)
   if (import.meta.env.DEV && typeof window !== "undefined") window.__poser = { camera, controls, rig };
   useEffect(() => {
     if (!active || rig.current) return;
@@ -215,6 +217,7 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
     from.current = cur.current;
     to.current = active ? toRaw(pose) : REST_RAW;
     t.current = 0;
+    act.current = 0;
   }, [active, pose, built]);
   const restDist = useRef(null);
   useEffect(() => { // 동작이 잘 보이도록 옆(3/4) 시점으로, 끄면 원래 정면으로
@@ -239,6 +242,8 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
     for (const k of BONE_KEYS) c[k] = (a[k] || 0) + ((b[k] || 0) - (a[k] || 0)) * e;
     cur.current = c;
     rig.current.apply(c);
+    act.current = active ? e : 0;
+    rig.current.updateMuscles(rolesRef.current, act.current); // 근육 길이 변화 → 굵기 변화
     if (controls) { // 자세 중심을 따라 시선 높이를 옮긴다(궤도 각도는 유지)
       // 위쪽 상단 바에 가리지 않게 시선을 자세 중심보다 살짝 위로 → 모델이 화면에서 조금 아래로
       const lift = camera.position.distanceTo(controls.target) * Math.tan((camera.fov * Math.PI) / 360) * 0.14;
@@ -733,6 +738,7 @@ export default function App() {
         <Tween layersRef={layersRef} />
         <Pulse layersRef={layersRef} />
         <AnatomyPoser layersRef={layersRef} active={sunOn} pose={SUN_POSES[sunStep].pose}
+          roles={focus?.kind === "sun" ? focus.role : null}
           ready={ready} onState={setPoseState} />
         <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />
         <CameraDirector apiRef={camApi} onUserMove={markViewMoved} />

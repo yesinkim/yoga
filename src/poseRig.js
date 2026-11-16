@@ -335,6 +335,73 @@ export function buildPoseRig(layers, options = {}) {
   }
   skinNew(layers);
 
+  // ── 부피 보존 근육 변형 ──
+  // 근육마다 긴 방향(주축)과 양 끝 정점을 찾아 두고, 자세가 바뀔 때 양 끝 사이 길이를 잰다.
+  // 근육은 부피가 거의 일정하므로 짧아지면(수축) 근복이 굵어지고, 늘어나면(신장) 가늘어진다.
+  // 단면 배율 = √(L0/L) — 셰이더가 근복(가운데)일수록 크게, 힘줄 쪽 끝은 그대로 둔다.
+  const musc = [];
+  const GAIN = 1.6;          // 눈에 보이도록 실제보다 조금 과장
+  const ACTIVE_BULGE = 0.07; // 수축 역할 근육은 길이 변화가 없어도 힘이 들어간 듯 살짝 부풂
+  const STRETCH_THIN = 0.06; // 신장 역할 근육은 길게 늘어난 듯 살짝 가늘게
+  function setupMuscleDeform(list) {
+    const c = new THREE.Vector3(), e = new THREE.Vector3(), t3 = new THREE.Vector3();
+    for (const m of list || []) {
+      if (!m.isSkinnedMesh || m.userData.mus) continue;
+      const P = m.geometry.attributes.position, n = P.count;
+      if (n < 12) continue;
+      c.set(0, 0, 0);
+      for (let i = 0; i < n; i++) c.x += P.getX(i), c.y += P.getY(i), c.z += P.getZ(i);
+      c.multiplyScalar(1 / n);
+      // 공분산 → 거듭제곱법으로 주축
+      let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+      for (let i = 0; i < n; i++) {
+        const x = P.getX(i) - c.x, y = P.getY(i) - c.y, z = P.getZ(i) - c.z;
+        xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+      }
+      e.set(1, 0.7, 0.4).normalize();
+      for (let k = 0; k < 24; k++) {
+        t3.set(xx * e.x + xy * e.y + xz * e.z, xy * e.x + yy * e.y + yz * e.z, xz * e.x + yz * e.y + zz * e.z);
+        if (t3.lengthSq() < 1e-20) break;
+        e.copy(t3).normalize();
+      }
+      let dMin = Infinity, dMax = -Infinity, ia = 0, ib = 0;
+      const d = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        d[i] = (P.getX(i) - c.x) * e.x + (P.getY(i) - c.y) * e.y + (P.getZ(i) - c.z) * e.z;
+        if (d[i] < dMin) { dMin = d[i]; ia = i; }
+        if (d[i] > dMax) { dMax = d[i]; ib = i; }
+      }
+      const span = dMax - dMin;
+      if (span < 1e-4) continue;
+      const aT = new Float32Array(n);
+      for (let i = 0; i < n; i++) aT[i] = (d[i] - dMin) / span;
+      m.geometry.setAttribute("aMusT", new THREE.BufferAttribute(aT, 1));
+      const A = new THREE.Vector3().fromBufferAttribute(P, ia), Bv = new THREE.Vector3().fromBufferAttribute(P, ib);
+      const mus = { ia, ib, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 } };
+      m.userData.mus = mus;
+      patchMaterial(m.material, mus);
+      musc.push(m);
+    }
+  }
+  setupMuscleDeform(layers.muscle.meshes);
+  // 매 프레임(자세 보간 중) 호출: roles = Map(근육 id → "c"|"s"), act 0~1 = 수축 힘 표시 세기
+  function updateMuscles(roles, act = 0) {
+    for (const m of musc) {
+      const u = m.userData.mus;
+      m.getVertexPosition(u.ia, u.uA.value);
+      m.getVertexPosition(u.ib, u.uB.value);
+      const L = u.uA.value.distanceTo(u.uB.value);
+      let k = (Math.sqrt(u.L0 / Math.max(L, 1e-6)) - 1) * GAIN;
+      k = Math.min(0.5, Math.max(-0.35, k));
+      // 동작별 역할(해부학 기준)로 방향을 바로잡는다: 단순 회전 관절이라 관절 바로 옆 근육(대둔근·햄스트링 등)은
+      // 길이 변화가 틀리게 잡힐 수 있음. 수축 → 굵어지는 쪽만, 신장 → 가늘어지는 쪽만.
+      const role = roles && act > 0 ? roles.get(m.userData.muscleId) : null;
+      if (role === "c") k = Math.max(k, 0) + ACTIVE_BULGE * act;
+      else if (role === "s") k = Math.min(k, 0) - STRETCH_THIN * act;
+      u.uS.value = k;
+    }
+  }
+
   // ── 접지용 표면 탐침(뼈에 붙은 점) ──
   const probes = [];
   const probe = (bone, p) => { const o = new THREE.Object3D(); o.position.copy(p).sub(pos[bone]); B[bone].add(o); probes.push(o); };
@@ -386,10 +453,29 @@ export function buildPoseRig(layers, options = {}) {
     for (const o of probes) bb.expandByPoint(o.getWorldPosition(wp));
     return bb.getCenter(center);
   }
-  return { apply, worldCenter, skinNew, skeleton, joints: J, restPos: pos, parent, grid: { lo: lo.toArray(), H, NX, NY, NZ, NB } };
+  return { apply, worldCenter, skinNew, updateMuscles, skeleton, joints: J, restPos: pos, parent, grid: { lo: lo.toArray(), H, NX, NY, NZ, NB } };
 }
 
 // 기존 Mesh를 그대로(참조 유지) SkinnedMesh로 바꾼다 — 강조/벗기기/클릭 로직이 같은 객체를 계속 쓰게
+// 근육 재질에 부피 보존 변형을 끼워 넣는다(스키닝 직후, 근육 주축에서 반지름 방향으로 늘이고 줄임)
+function patchMaterial(mat, mus) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uMusA = mus.uA; shader.uniforms.uMusB = mus.uB; shader.uniforms.uMusS = mus.uS;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;")
+      .replace("#include <skinning_vertex>", `#include <skinning_vertex>
+      {
+        vec3 musAB = uMusB - uMusA;
+        float musLL = max(dot(musAB, musAB), 1e-10);
+        vec3 musP = uMusA + musAB * (dot(transformed - uMusA, musAB) / musLL);
+        float musBelly = sin(3.14159265 * clamp(aMusT, 0.0, 1.0));
+        transformed = musP + (transformed - musP) * (1.0 + uMusS * musBelly);
+      }`);
+  };
+  mat.customProgramCacheKey = () => "muscle-volume-v1";
+  mat.needsUpdate = true;
+}
+
 function makeSkinned(m, skeleton, dom) {
   Object.setPrototypeOf(m, THREE.SkinnedMesh.prototype);
   m.isSkinnedMesh = true;

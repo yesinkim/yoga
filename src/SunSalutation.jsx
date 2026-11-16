@@ -65,7 +65,7 @@ const ROLE = {
   },
   adhoMukha: {
     c: ["deltoid", "triceps", "serratus", "trapezius", "rectus_femoris", "vastus_medialis", "transversus"],
-    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "latissimus"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "gluteus_max", "latissimus"],
   },
 };
 
