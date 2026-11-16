@@ -5,7 +5,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { SunPanel, SUN_POSES, toRaw, ease } from "./SunSalutation.jsx";
-import { buildPoseRig, BONE_KEYS } from "./poseRig.js";
+import { buildPoseRig, loadProxyWeights, BONE_KEYS } from "./poseRig.js";
 import { FeedbackButton, FeedbackDialog, FeedbackAdmin } from "./Feedback.jsx";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
@@ -190,11 +190,20 @@ function AnatomyPoser({ layersRef, active, pose, ready, onState }) {
     const L = layersRef.current;
     if (!L.muscle || !L.skeleton) return;
     onState("rigging");
-    const id = setTimeout(() => {
-      try { rig.current = buildPoseRig(L); setBuilt(true); onState("ready"); }
-      catch (e) { console.error(e); onState("error"); }
+    let cancelled = false;
+    const id = setTimeout(async () => {
+      try {
+        // Blender 프록시 Bone Heat 웨이트(약 1.2MB). 실패하면 계산한 웨이트로 대체. ?noproxy 로 끌 수 있음
+        let grid = null;
+        if (!new URLSearchParams(window.location.search).has("noproxy")) {
+          grid = await loadProxyWeights(`${import.meta.env.BASE_URL}models/proxy_weights.bin`).catch(() => null);
+        }
+        if (cancelled) return;
+        rig.current = buildPoseRig(L, { grid });
+        setBuilt(true); onState("ready");
+      } catch (e) { console.error(e); onState("error"); }
     }, 80);
-    return () => clearTimeout(id);
+    return () => { cancelled = true; clearTimeout(id); };
   }, [active, ready, layersRef, onState]);
   useEffect(() => { // 나중에 로드된 레이어(피부)도 뼈대에 붙인다
     if (!rig.current) return;

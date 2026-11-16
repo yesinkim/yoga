@@ -95,6 +95,29 @@ function segD2(p, a, b) {
   return dx * dx + dy * dy + dz * dz;
 }
 
+// Blender 프록시 Bone Heat로 구운 웨이트 격자(scripts/bake_proxy_weights.py가 만듦)
+// 헤더 32바이트: 'PXW1', NX NY NZ NB(uint16), lo(f32×3), H(f32) / 칸마다 뼈 4개(4비트씩) + 가중치 3개(uint8)
+export async function loadProxyWeights(url) {
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const buf = await r.arrayBuffer();
+  const dv = new DataView(buf);
+  if (buf.byteLength < 32 || String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== "PXW1") return null;
+  const NX = dv.getUint16(4, true), NY = dv.getUint16(6, true), NZ = dv.getUint16(8, true), NB = dv.getUint16(10, true);
+  const lo = [dv.getFloat32(12, true), dv.getFloat32(16, true), dv.getFloat32(20, true)], H = dv.getFloat32(24, true);
+  const n = NX * NY * NZ;
+  if (buf.byteLength < 32 + n * 5) return null;
+  const data = new Float32Array(n * NB);
+  for (let c = 0, o = 32; c < n; c++, o += 5) {
+    const idx = dv.getUint16(o, true);
+    const w0 = dv.getUint8(o + 2), w1 = dv.getUint8(o + 3), w2 = dv.getUint8(o + 4);
+    const w3 = Math.max(0, 255 - w0 - w1 - w2), base = c * NB;
+    data[base + (idx & 15)] += w0 / 255; data[base + ((idx >> 4) & 15)] += w1 / 255;
+    data[base + ((idx >> 8) & 15)] += w2 / 255; data[base + ((idx >> 12) & 15)] += w3 / 255;
+  }
+  return { NX, NY, NZ, NB, lo, H, data };
+}
+
 export function buildPoseRig(layers, options = {}) {
   const F = layers.muscle.scene;           // 기준 좌표계 = 근육 glb 씬
   let top = F; while (top.parent) top = top.parent;
@@ -199,7 +222,18 @@ export function buildPoseRig(layers, options = {}) {
   const hi = new THREE.Vector3(Math.max(J.handR.x, J.shR.x) + 0.12, J.headTop.y + 0.05, 0.3);
   const NX = Math.ceil((hi.x - lo.x) / H) + 1, NY = Math.ceil((hi.y - lo.y) / H) + 1, NZ = Math.ceil((hi.z - lo.z) / H) + 1;
   let field = null;
-  if (options.smooth !== false) {
+  // Blender에서 구운 웨이트 격자(같은 격자 배치)가 오면 그걸 쓰고 살짝만 흐린다
+  // 구운 격자는 관절 위치에서 만든 격자와 배치가 같을 때만 쓴다(모델이 바뀌면 다시 구워야 함)
+  const g = options.grid;
+  const same = g && g.NX === NX && g.NY === NY && g.NZ === NZ && g.NB === NB && Math.abs(g.H - H) < 1e-6 &&
+    g.lo.every((v, i) => Math.abs(v - lo.getComponent(i)) < 2e-3);
+  const baked = same ? g.data : null;
+  if (g && !same) console.warn("[poseRig] baked weights don't match this model — using computed weights");
+  if (baked) {
+    field = new Float32Array(baked);
+    const tmp = new Float32Array(field.length);
+    blur3(field, tmp, 1, 1);
+  } else if (options.smooth !== false) {
     field = new Float32Array(NX * NY * NZ * NB);
     const c = new THREE.Vector3();
     for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
@@ -208,16 +242,18 @@ export function buildPoseRig(layers, options = {}) {
       field.set(acc, ((z * NY + y) * NX + x) * NB);
     }
     // 축별 상자 흐림(BLUR칸 반경) 두 번 ≈ 부드러운 가우시안
-    const tmp = new Float32Array(field.length);
+    blur3(field, new Float32Array(field.length), BLUR, 2);
+  }
+  // 축별 상자 흐림(radius칸) rounds번 — 근사 가우시안
+  function blur3(f, tmp, radius, rounds) {
     const pass = (src, dst, axis) => {
-      const [sx, sy, sz] = [1, NX, NX * NY];
-      const st = axis === 0 ? sx : axis === 1 ? sy : sz, L = axis === 0 ? NX : axis === 1 ? NY : NZ;
+      const st = axis === 0 ? 1 : axis === 1 ? NX : NX * NY, L = axis === 0 ? NX : axis === 1 ? NY : NZ;
       for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
         const i0 = (z * NY + y) * NX + x, p = axis === 0 ? x : axis === 1 ? y : z;
         const o = i0 * NB;
         for (let b = 0; b < NB; b++) {
           let s2 = 0, cnt = 0;
-          for (let d = -BLUR; d <= BLUR; d++) {
+          for (let d = -radius; d <= radius; d++) {
             const q = p + d; if (q < 0 || q >= L) continue;
             s2 += src[(i0 + d * st) * NB + b]; cnt++;
           }
@@ -225,7 +261,7 @@ export function buildPoseRig(layers, options = {}) {
         }
       }
     };
-    for (let r = 0; r < 2; r++) { pass(field, tmp, 0); pass(tmp, field, 1); pass(field, tmp, 2); field.set(tmp); }
+    for (let r = 0; r < rounds; r++) { pass(f, tmp, 0); pass(tmp, f, 1); pass(f, tmp, 2); f.set(tmp); }
   }
   // 격자 장에서 삼선형 보간
   function sampleField(v, out) {
@@ -350,7 +386,7 @@ export function buildPoseRig(layers, options = {}) {
     for (const o of probes) bb.expandByPoint(o.getWorldPosition(wp));
     return bb.getCenter(center);
   }
-  return { apply, worldCenter, skinNew, skeleton, joints: J };
+  return { apply, worldCenter, skinNew, skeleton, joints: J, restPos: pos, parent, grid: { lo: lo.toArray(), H, NX, NY, NZ, NB } };
 }
 
 // 기존 Mesh를 그대로(참조 유지) SkinnedMesh로 바꾼다 — 강조/벗기기/클릭 로직이 같은 객체를 계속 쓰게
