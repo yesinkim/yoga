@@ -4,7 +4,7 @@
 // 같은 관절 각도로 해부 모델 자체도 굽힌다(poseRig.js). 이 마네킹은 옆모습 참고용 미니 뷰이고,
 // App은 동작별 동원 근육(ids)을 해부 모델에 강조한다.
 // ──────────────────────────────────────────────────────────────────────────
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -184,11 +184,14 @@ function SideCam() {
 export function SunPanel({ step, setStep, playing, setPlaying, onClose }) {
   const s = SUN_POSES[step];
   const n = SUN_POSES.length;
+  // 느리게: 한 동작을 한 호흡(약 5.5초)씩 — 따라 하며 보기 좋게
+  const [slow, setSlow] = useState(() => { try { return localStorage.getItem("sunSlow") === "1"; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem("sunSlow", slow ? "1" : "0"); } catch { /* 저장 안 돼도 그만 */ } }, [slow]);
   useEffect(() => {
     if (!playing) return;
-    const id = setInterval(() => setStep((i) => (i + 1) % n), 3200);
+    const id = setInterval(() => setStep((i) => (i + 1) % n), slow ? 5500 : 3200);
     return () => clearInterval(id);
-  }, [playing, setStep, n]);
+  }, [playing, setStep, n, slow]);
   const go = (d) => { setPlaying(false); setStep((i) => (i + d + n) % n); };
   const breathCls = s.breath === "들숨" ? "in" : s.breath === "날숨" ? "out" : "hold";
 
@@ -205,6 +208,16 @@ export function SunPanel({ step, setStep, playing, setPlaying, onClose }) {
             <meshBasicMaterial color="#5d6b76" />
           </mesh>
         </Canvas>
+      </div>
+      <div className="sun-dots" role="tablist" aria-label="동작 바로가기">
+        {SUN_POSES.map((p, i) => (
+          <button key={i} role="tab" aria-selected={i === step}
+            className={"sun-dot " + (p.breath === "들숨" ? "in" : p.breath === "날숨" ? "out" : "hold") + (i === step ? " on" : "")}
+            onClick={() => { setPlaying(false); setStep(i); }} title={`${i + 1}. ${p.ko} · ${p.breath}`}
+            aria-label={`${i + 1}번 ${p.ko}`} />
+        ))}
+        <button className={"sun-speed" + (slow ? " on" : "")} onClick={() => setSlow((v) => !v)}
+          title="한 동작을 한 호흡 길이로 천천히" aria-pressed={slow}>{slow ? "천천히" : "보통"}</button>
       </div>
       <div className="sun-info">
         <span className="sun-step">{step + 1}/{n}</span>

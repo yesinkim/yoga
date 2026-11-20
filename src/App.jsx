@@ -678,6 +678,9 @@ export default function App() {
     if (!sunOn) return;
     const onKey = (e) => {
       if (e.target instanceof HTMLElement && e.target.matches("input,textarea,select")) return;
+      if (e.key === " " && !(e.target instanceof HTMLButtonElement)) { // 스페이스: 재생/정지
+        e.preventDefault(); setSunPlaying((v) => !v); return;
+      }
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       e.preventDefault();
       setSunPlaying(false);
