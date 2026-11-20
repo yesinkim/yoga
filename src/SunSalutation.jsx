@@ -20,22 +20,32 @@ export function toRaw(p) {
   };
   r.ankL = p.footL - (r.root + r.hipL + r.kneeL);
   r.ankR = p.footR - (r.root + r.hipR + r.kneeR);
+  // hand = 손가락의 월드 각도(0 아래로 늘어뜨림, 90 앞으로 — 바닥 짚기). 주면 손바닥이 바닥을 보게 아래팔을 엎친다(tw 180°)
+  for (const S of ["L", "R"]) {
+    const h = p["hand" + S];
+    if (h == null) { r["wr" + S] = 0; r["tw" + S] = 0; continue; }
+    // 엎친(180°) 아래팔에선 손목 굽힘 방향이 뒤집힌다 → 손가락 월드 각 = -(사슬 합 - wr)
+    r["wr" + S] = h + (r.root + r.spine + r.chest + r["sh" + S] + r["el" + S]);
+    r["tw" + S] = 180;
+  }
   return r;
 }
 const sym = (o) => ({
   lean: o.lean, spine: o.spine, chest: o.chest, neck: o.neck,
   armL: o.arm, armR: o.arm, elbowL: o.elbow, elbowR: o.elbow,
   hipL: o.hip, hipR: o.hip, kneeL: o.knee, kneeR: o.knee, footL: o.foot, footR: o.foot,
+  handL: o.hand, handR: o.hand,
 });
 
 const SAMA = sym({ lean: 0, spine: 0, chest: 0, neck: 0, arm: 3, elbow: 5, hip: 0, knee: 0, foot: 0 });
 const URDHVA_HASTA = sym({ lean: 0, spine: -5, chest: -8, neck: -20, arm: 167, elbow: 0, hip: 0, knee: 0, foot: 0 });
-const UTTANA = sym({ lean: 95, spine: 25, chest: 20, neck: 10, arm: 150, elbow: 0, hip: 95, knee: 0, foot: 0 });
-// 무릎은 펴고 골반을 깊게 접어 등은 평평하게, 손끝은 발 옆 바닥에
-const ARDHA_UTTANA = sym({ lean: 117, spine: 0, chest: 0, neck: -45, arm: 117, elbow: 0, hip: 117, knee: 0, foot: 0 });
-const CHATURANGA = sym({ lean: 88, spine: 0, chest: 0, neck: -5, arm: 8, elbow: 80, hip: 0, knee: 0, foot: 80 });
-const URDHVA_MUKHA = sym({ lean: 75, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: -5, knee: 0, foot: 170 });
-const ADHO_MUKHA = sym({ lean: 125, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 85, knee: 0, foot: 0 });
+// 골반을 깊게 접고 정수리는 바닥으로, 손바닥은 발 옆 바닥에(발이 뜨지 않게 팔 각도를 맞춤)
+const UTTANA = sym({ lean: 110, spine: 28, chest: 20, neck: 15, arm: 140, elbow: 0, hip: 110, knee: 0, foot: 0, hand: 90 });
+// 무릎은 펴고 골반을 깊게 접어 등은 평평하게, 손끝은 발 옆 바닥에(손바닥은 뒤를 봄)
+const ARDHA_UTTANA = sym({ lean: 110, spine: 0, chest: 0, neck: -45, arm: 80, elbow: 0, hip: 110, knee: 0, foot: 0, hand: 0 });
+const CHATURANGA = sym({ lean: 86, spine: 0, chest: 0, neck: -5, arm: -5, elbow: 91, hip: 0, knee: 0, foot: 60, hand: 90 });
+const URDHVA_MUKHA = sym({ lean: 79, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: 5, knee: 0, foot: 170, hand: 90 });
+const ADHO_MUKHA = sym({ lean: 120, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 75, knee: 0, foot: 0, hand: 90 });
 
 // 동작별 근육 역할 — c: 수축(힘을 쓰는 근육), s: 신장(늘어나는 근육)
 const ROLE = {

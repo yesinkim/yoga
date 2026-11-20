@@ -8,11 +8,14 @@ import * as THREE from "three";
 
 const D = Math.PI / 180;
 export const BONE_KEYS = ["root", "spine", "chest", "neck", "shL", "shR", "elL", "elR",
-  "hipL", "hipR", "kneeL", "kneeR", "ankL", "ankR", "clL", "clR"];
+  "hipL", "hipR", "kneeL", "kneeR", "ankL", "ankR", "clL", "clR", "wrL", "wrR"];
+// 자세 값(도) 키 = 뼈 + 아래팔 비틀기(엎침)
+export const POSE_KEYS = [...BONE_KEYS, "twL", "twR"];
 // 팔을 들면 어깨뼈·빗장뼈(어깨띠)도 함께 돈다(견갑상완 리듬 ≈ 2:1) → 팔 회전을 나눠 맡겨 어깨 주변이 덜 찢어지게
 const GIRDLE_SHARE = 0.3;
 
 const _v = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _m2 = new THREE.Matrix4();
 const _box = new THREE.Box3();
@@ -102,18 +105,23 @@ export async function loadProxyWeights(url) {
   if (!r.ok) return null;
   const buf = await r.arrayBuffer();
   const dv = new DataView(buf);
-  if (buf.byteLength < 32 || String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== "PXW1") return null;
+  const magic = buf.byteLength >= 32 ? String.fromCharCode(...new Uint8Array(buf, 0, 4)) : "";
+  if (magic !== "PXW1" && magic !== "PXW2") return null;
+  const v2 = magic === "PXW2"; // PXW2: 뼈 번호 4개를 1바이트씩(16개 넘는 뼈 — 손목 추가)
   const NX = dv.getUint16(4, true), NY = dv.getUint16(6, true), NZ = dv.getUint16(8, true), NB = dv.getUint16(10, true);
   const lo = [dv.getFloat32(12, true), dv.getFloat32(16, true), dv.getFloat32(20, true)], H = dv.getFloat32(24, true);
   const n = NX * NY * NZ;
-  if (buf.byteLength < 32 + n * 5) return null;
+  const rec = v2 ? 7 : 5;
+  if (buf.byteLength < 32 + n * rec) return null;
   const data = new Float32Array(n * NB);
-  for (let c = 0, o = 32; c < n; c++, o += 5) {
-    const idx = dv.getUint16(o, true);
-    const w0 = dv.getUint8(o + 2), w1 = dv.getUint8(o + 3), w2 = dv.getUint8(o + 4);
+  for (let c = 0, o = 32; c < n; c++, o += rec) {
+    let b0, b1, b2, b3, w;
+    if (v2) { b0 = dv.getUint8(o); b1 = dv.getUint8(o + 1); b2 = dv.getUint8(o + 2); b3 = dv.getUint8(o + 3); w = o + 4; }
+    else { const idx = dv.getUint16(o, true); b0 = idx & 15; b1 = (idx >> 4) & 15; b2 = (idx >> 8) & 15; b3 = (idx >> 12) & 15; w = o + 2; }
+    const w0 = dv.getUint8(w), w1 = dv.getUint8(w + 1), w2 = dv.getUint8(w + 2);
     const w3 = Math.max(0, 255 - w0 - w1 - w2), base = c * NB;
-    data[base + (idx & 15)] += w0 / 255; data[base + ((idx >> 4) & 15)] += w1 / 255;
-    data[base + ((idx >> 8) & 15)] += w2 / 255; data[base + ((idx >> 12) & 15)] += w3 / 255;
+    if (b0 < NB) data[base + b0] += w0 / 255; if (b1 < NB) data[base + b1] += w1 / 255;
+    if (b2 < NB) data[base + b2] += w2 / 255; if (b3 < NB) data[base + b3] += w3 / 255;
   }
   return { NX, NY, NZ, NB, lo, H, data };
 }
@@ -128,14 +136,14 @@ export function buildPoseRig(layers, options = {}) {
   // ── 뼈대 ──
   const pos = {
     root: J.pelvis, spine: J.L5, chest: J.T12, neck: J.C7,
-    shL: J.shL, shR: J.shR, elL: J.elL, elR: J.elR,
+    shL: J.shL, shR: J.shR, elL: J.elL, elR: J.elR, wrL: J.wrL, wrR: J.wrR,
     clL: new THREE.Vector3(-0.04, J.shL.y - 0.03, J.shL.z),  // 어깨띠 회전축(어깨 깊이 — 등 쪽이 크게 휘둘리지 않게)
     clR: new THREE.Vector3(0.04, J.shR.y - 0.03, J.shR.z),
     hipL: J.hipL, hipR: J.hipR, kneeL: J.kneeL, kneeR: J.kneeR, ankL: J.ankL, ankR: J.ankR,
   };
   const parent = {
     root: null, spine: "root", chest: "spine", neck: "chest", shL: "clL", shR: "clR", clL: "chest", clR: "chest",
-    elL: "shL", elR: "shR", hipL: "root", hipR: "root", kneeL: "hipL", kneeR: "hipR", ankL: "kneeL", ankR: "kneeR",
+    elL: "shL", elR: "shR", wrL: "elL", wrR: "elR", hipL: "root", hipR: "root", kneeL: "hipL", kneeR: "hipR", ankL: "kneeL", ankR: "kneeR",
   };
   const B = {};
   // 부모가 먼저 만들어지도록 깊이 순으로 생성(스켈레톤 인덱스 순서는 BONE_KEYS 그대로)
@@ -145,6 +153,7 @@ export function buildPoseRig(layers, options = {}) {
     const p = pos[k].clone();
     if (parent[k]) p.sub(pos[parent[k]]);
     b.position.copy(p);
+    if (/^wr/.test(k)) b.rotation.order = "YXZ"; // 손목: 굽힌 뒤 비틀기 → 엎친 아래팔에서도 손이 옆으로 꺾이지 않게
     (parent[k] ? B[parent[k]] : F).add(b);
   }
   F.updateMatrixWorld(true);
@@ -163,7 +172,8 @@ export function buildPoseRig(layers, options = {}) {
   ];
   for (const S of ["L", "R"]) {
     segs.push([idx["sh" + S], J["sh" + S], J["el" + S]]);
-    segs.push([idx["el" + S], J["el" + S], J["hand" + S]]);
+    segs.push([idx["el" + S], J["el" + S], J["wr" + S]]);
+    segs.push([idx["wr" + S], J["wr" + S], J["hand" + S]]);
     segs.push([idx["hip" + S], J["hip" + S], J["knee" + S]]);
     segs.push([idx["knee" + S], J["knee" + S], J["ank" + S]]);
     segs.push([idx["ank" + S], J["ank" + S], J["toe" + S]], [idx["ank" + S], J["ank" + S], J["heel" + S]]);
@@ -177,7 +187,7 @@ export function buildPoseRig(layers, options = {}) {
   const kind = new Int8Array(BONE_KEYS.length); // 0 몸통, 1 팔, 2 다리
   BONE_KEYS.forEach((k, i) => {
     side[i] = k.endsWith("L") ? -1 : k.endsWith("R") ? 1 : 0;
-    kind[i] = /^(sh|el)/.test(k) ? 1 : /^(hip|knee|ank)/.test(k) ? 2 : /^cl/.test(k) ? 3 : 0;
+    kind[i] = /^(sh|el|wr)/.test(k) ? 1 : /^(hip|knee|ank)/.test(k) ? 2 : /^cl/.test(k) ? 3 : 0;
   });
 
   const best = new Float32Array(BONE_KEYS.length);
@@ -277,6 +287,25 @@ export function buildPoseRig(layers, options = {}) {
       for (let b = 0; b < NB; b++) out[b] += field[o + b] * w;
     }
   }
+  // 손목: 격자 웨이트는 흐림 때문에 손바닥까지 아래팔(el)이 반쯤 섞여 손이 덜 꺾이고 비틀 때 찌그러진다.
+  // 아래팔·손에 속한 점(el+wr 웨이트가 큰 점)은 팔꿈치→손끝 축 위 위치로 손목 앞뒤 ±WRIST_BLEND만 섞고 나눈다.
+  const WRIST_BLEND = 0.02, WRIST_SHIFT = 0.01; // 손목뼈(손목관절 바로 아래)부터 손으로 — 축 위 관절보다 1cm 몸쪽에서 섞기 시작
+  const wristAxis = {};
+  for (const S of ["L", "R"]) {
+    const a = J["el" + S], d = J["hand" + S].clone().sub(a), len = d.length();
+    d.normalize();
+    wristAxis[S] = { a, d, tw: J["wr" + S].clone().sub(a).dot(d), len, el: idx["el" + S], wr: idx["wr" + S] };
+  }
+  function wristSplit(v, out) {
+    for (const S of ["L", "R"]) {
+      const w = wristAxis[S], fw = out[w.el] + out[w.wr];
+      if (fw < 0.5) continue;
+      const t = _v2.copy(v).sub(w.a).dot(w.d);
+      const u = Math.min(1, Math.max(0, (t - w.tw + WRIST_SHIFT + WRIST_BLEND) / (2 * WRIST_BLEND)));
+      const k = u * u * (3 - 2 * u);
+      out[w.wr] = fw * k; out[w.el] = fw * (1 - k);
+    }
+  }
   const done = new Map(); // geometry → matrix(중복 공유 지오메트리 처리)
   const all = [];
   // 아직 스키닝 안 된 메시에 웨이트를 계산해 붙인다(나중에 로드된 피부도 여기로)
@@ -307,6 +336,7 @@ export function buildPoseRig(layers, options = {}) {
       _v.fromBufferAttribute(P, i).applyMatrix4(_m);
       if (field) sampleField(_v, acc); else pointWeights(_v, acc);
       allowMask(_v, acc); // 좌우·팔다리 구분은 흐린 뒤에도 지킨다
+      wristSplit(_v, acc);
       // 가장 큰 네 뼈만 남겨 정규화
       const top = [-1, -1, -1, -1];
       for (let b = 0; b < NB; b++) {
@@ -406,7 +436,7 @@ export function buildPoseRig(layers, options = {}) {
       // 넓적한(단면이 납작한) 근육은 직선 축 기준 확대가 근육을 통째로 밀어내거나 꺼뜨리므로 표면 법선 방향으로
       const sheet = thin < SHEET_RATIO * wide;
       const mus = { endA, endB, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 },
-        uSheet: { value: sheet ? 1 : 0 }, uThick: { value: Math.min(thin * 1.5, 0.008) } };
+        uSheet: { value: sheet ? 1 : 0 }, uThick: { value: Math.min(thin * 1.5, shellHalfThickness(m.geometry), 0.008) } };
       m.userData.mus = mus;
       patchMaterial(m.material, mus);
       musc.push(m);
@@ -436,7 +466,8 @@ export function buildPoseRig(layers, options = {}) {
   const probe = (bone, p) => { const o = new THREE.Object3D(); o.position.copy(p).sub(pos[bone]); B[bone].add(o); probes.push(o); };
   for (const S of ["L", "R"]) {
     probe("ank" + S, J["heel" + S]); probe("ank" + S, J["toe" + S]);
-    probe("el" + S, J["hand" + S]); probe("el" + S, J["el" + S].clone().add(new THREE.Vector3(0, 0, -0.04)));
+    probe("wr" + S, J["hand" + S]); probe("wr" + S, J["wr" + S]); // 손끝·손목(손바닥 뒤꿈치)
+    probe("el" + S, J["el" + S].clone().add(new THREE.Vector3(0, 0, -0.04)));
     probe("knee" + S, J["knee" + S].clone().add(new THREE.Vector3(0, 0, 0.06)));
     probe("hip" + S, mid(J["hip" + S], J["knee" + S], 0.5).add(new THREE.Vector3(0, 0, 0.07)));
     probe("sh" + S, J["sh" + S].clone().add(new THREE.Vector3(0, 0.03, 0)));
@@ -461,7 +492,13 @@ export function buildPoseRig(layers, options = {}) {
 
   // raw(도) → 뼈 회전, 발바닥을 원래 바닥 높이에, 앞뒤 중심 유지
   function apply(raw) {
-    for (const k of BONE_KEYS) B[k].rotation.x = (raw[k] || 0) * D;
+    for (const k of BONE_KEYS) B[k].rotation.set((raw[k] || 0) * D, 0, 0);
+    // 아래팔 엎침(손바닥을 바닥으로): 팔꿈치·손목에 반씩 나눠 비틀어 한 관절에서 꼬이며 찌그러지지 않게
+    for (const S of ["L", "R"]) {
+      const tw = (raw["tw" + S] || 0) * D;
+      B["el" + S].rotation.y = tw * 0.5;
+      B["wr" + S].rotation.y = tw * 0.5;
+    }
     for (const S of ["L", "R"]) { // 팔 회전을 어깨띠와 어깨 관절에 나눠 준다
       const a = (raw["sh" + S] || 0) * D;
       B["cl" + S].rotation.x = a * GIRDLE_SHARE;
@@ -487,6 +524,22 @@ export function buildPoseRig(layers, options = {}) {
 
 // 기존 Mesh를 그대로(참조 유지) SkinnedMesh로 바꾼다 — 강조/벗기기/클릭 로직이 같은 객체를 계속 쓰게
 // 근육 재질에 부피 보존 변형을 끼워 넣는다(스키닝 직후, 근육 주축에서 반지름 방향으로 늘이고 줄임)
+// 넓적한 근육의 반두께 ≈ 부피/겉넓이 (얇은 닫힌 껍데기: 부피 ≈ 넓이/2 × 두께)
+// PCA 두께는 몸을 감싸며 휜 근육에서 휜 정도까지 두께로 잡아 과대 → 법선 이동이 반대편 면을 넘어가 깜빡임(겹침)이 생긴다
+function shellHalfThickness(g) {
+  const P = g.attributes.position, I = g.index, n = I ? I.count : P.count;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), t = new THREE.Vector3();
+  let area = 0, vol = 0;
+  for (let i = 0; i + 2 < n; i += 3) {
+    const i0 = I ? I.getX(i) : i, i1 = I ? I.getX(i + 1) : i + 1, i2 = I ? I.getX(i + 2) : i + 2;
+    a.fromBufferAttribute(P, i0); b.fromBufferAttribute(P, i1); c.fromBufferAttribute(P, i2);
+    vol += a.dot(t.crossVectors(b, c)) / 6;
+    area += t.crossVectors(b.sub(a), c.sub(a)).length() / 2;
+  }
+  if (area <= 0) return Infinity;
+  return Math.abs(vol) / area; // = 두께/2
+}
+
 function patchMaterial(mat, mus) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uMusA = mus.uA; shader.uniforms.uMusB = mus.uB; shader.uniforms.uMusS = mus.uS;

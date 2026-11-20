@@ -10,7 +10,8 @@
 #   const R = __poser.rig.current, o = {}; for (const k in R.restPos) o[k] = R.restPos[k].toArray();
 #   copy(JSON.stringify({ pos: o, parent: R.parent, grid: R.grid }))
 # 실행: pip install bpy 후
-#   python bake_proxy_weights.py -- public/models/surface.glb joints.json public/models/proxy_weights.bin 0.008
+#   python bake_proxy_weights.py -- public/models/surface.glb joints.json public/models/proxy_weights.bin 0.008 public/models/skeleton.glb
+# (bpy 휠에 Draco 디코더가 없으면 glb를 먼저 비압축으로 풀어서 넘긴다 — 예: gltf-transform로 KHR_draco_mesh_compression 제거)
 # 모델이나 관절 계산(poseRig.js)이 바뀌면 다시 구워야 한다. 격자가 안 맞으면 앱은 계산 웨이트로 대체한다.
 # ──────────────────────────────────────────────────────────────────────────
 import bpy, bmesh, sys, json, time
@@ -20,13 +21,15 @@ from mathutils.bvhtree import BVHTree
 from mathutils.geometry import barycentric_transform
 args = sys.argv[sys.argv.index('--') + 1:]
 glb, jfile, out, voxel = args[0], args[1], args[2], float(args[3])
+skel_glb = args[4] if len(args) > 4 else None  # 골격 glb(갈비뼈로 몸통 안쪽 마스크) — 없으면 예전처럼
 SC = 10.0  # Bone Heat은 작은 모델에서 수치 계산이 실패하므로 10배로 키워서 계산
-KEYS = ["root","spine","chest","neck","shL","shR","elL","elR","hipL","hipR","kneeL","kneeR","ankL","ankR","clL","clR"]
+KEYS = ["root","spine","chest","neck","shL","shR","elL","elR","hipL","hipR","kneeL","kneeR","ankL","ankR","clL","clR","wrL","wrR"]
 J = json.load(open(jfile)); P = {k: Vector(v) for k, v in J['pos'].items()}; G = J['grid']
 g2b = lambda v: Vector((v[0], -v[2], v[1])) * SC  # glTF(Y-up) → Blender(Z-up), ×SC
 tail = {'root':P['spine'],'spine':P['chest'],'chest':P['neck'],'neck':P['neck']+Vector((0,.25,0)),
  'clL':P['shL'],'clR':P['shR'],'shL':P['elL'],'shR':P['elR'],
- 'elL':P['elL']+(P['elL']-P['shL'])*1.1,'elR':P['elR']+(P['elR']-P['shR'])*1.1,
+ 'elL':P['wrL'],'elR':P['wrR'],
+ 'wrL':P['wrL']+(P['wrL']-P['elL'])*0.7,'wrR':P['wrR']+(P['wrR']-P['elR'])*0.7,
  'hipL':P['kneeL'],'hipR':P['kneeR'],'kneeL':P['ankL'],'kneeR':P['ankR'],
  'ankL':P['ankL']+Vector((0,-.05,.15)),'ankR':P['ankR']+Vector((0,-.05,.15))}
 t0 = time.time()
@@ -117,17 +120,58 @@ for z in range(NZ):
       grid[z, y, x] = W[a] * wa + W[b2] * wb + W[c2] * wc
 print(f'grid baked {NX}x{NY}x{NZ} miss {miss} ({time.time()-t0:.1f}s)', flush=True)
 grid = np.clip(grid, 0, None)
-# 압축 저장: 칸마다 상위 4개 뼈(4비트×4 = 2바이트) + 가중치 3개(uint8, 넷째는 나머지)
-# 헤더 32바이트: 'PXW1', NX NY NZ NB(uint16), lo(f32×3), H(f32), 0
+
+# 몸통 안쪽 마스크: 차렷 자세에선 갈비뼈 옆벽(전거근·외복사근·광배근 자리)에서 가장 가까운 피부가
+# 팔 안쪽 피부라 팔 웨이트가 새어 들어온다 → 팔을 들면 옆구리 근육이 팔에 끌려 올라가 찢어지고 길이가 틀어진다.
+# 갈비뼈 높이에서 갈비뼈 바깥 테두리(+RIB_PAD) 안쪽은 팔(sh·el) 웨이트를 빼고, 목 아래에선 목 웨이트도 뺀다.
+if skel_glb:
+  bpy.ops.object.select_all(action='DESELECT')
+  before = set(bpy.context.scene.objects)
+  bpy.ops.import_scene.gltf(filepath=skel_glb)
+  import re
+  rib_re = re.compile(r'(\brib\b|costal cartilage|sternum)', re.I)
+  pts = []
+  for o in bpy.context.scene.objects:
+    if o in before or o.type != 'MESH' or not rib_re.search(o.name): continue
+    mw2 = o.matrix_world
+    pts += [tuple(mw2 @ v.co) for v in o.data.vertices]  # Blender 좌표(Z-up), 배율 1
+  pts = np.array(pts, np.float32)
+  gx, gy = pts[:, 0], pts[:, 2]  # glTF x, y
+  ys = lo[1] + np.arange(NY) * H
+  ribX = np.full(NY, -1.0, np.float32)
+  for j, yv in enumerate(ys):
+    sel = np.abs(gy - yv) <= 1.5 * H
+    if sel.any(): ribX[j] = np.abs(gx[sel]).max()
+  ok = ribX > 0
+  print(f'ribs: {len(pts)} pts, y {gy.min():.3f}..{gy.max():.3f}, max |x| {ribX.max():.3f}', flush=True)
+  RIB_PAD, RIB_FADE = 0.008, 0.015  # 갈비뼈 바로 바깥 ~1cm까지만 — 위팔뼈 머리(x≈0.145)·부리위팔근은 건드리지 않게
+  arm = [KEYS.index(k) for k in ('shL', 'shR', 'elL', 'elR', 'wrL', 'wrR')]; neck = KEYS.index('neck'); chest = KEYS.index('chest')
+  c7y = P['neck'].y
+  xs_ = np.abs(lo[0] + np.arange(NX) * H)
+  masked = 0
+  for y in range(NY):
+    if not ok[y]: continue
+    # 1(완전 몸통) → 0(바깥): 갈비뼈+PAD 까지는 1, 그 뒤 FADE 동안 줄어든다
+    f = np.clip((ribX[y] + RIB_PAD + RIB_FADE - xs_) / RIB_FADE, 0, 1)
+    for x in np.nonzero(f > 0)[0]:
+      cell = grid[:, y, x]  # (NZ, NB)
+      cell[:, arm] *= (1 - f[x])
+      if ys[y] < c7y: cell[:, neck] *= (1 - f[x])
+      sm = cell.sum(1, keepdims=True)
+      cell[sm[:, 0] < 1e-6, chest] = 1.0
+      grid[:, y, x] = cell / np.maximum(cell.sum(1, keepdims=True), 1e-9)
+      masked += NZ
+  print(f'torso mask applied to {masked} cells', flush=True)
+# 압축 저장: 칸마다 상위 4개 뼈(1바이트×4) + 가중치 3개(uint8, 넷째는 나머지)
+# 헤더 32바이트: 'PXW2', NX NY NZ NB(uint16), lo(f32×3), H(f32), 0  (PXW1은 뼈 번호 4비트 — 16개까지)
 flat = grid.reshape(-1, NB)
 top = np.argsort(-flat, axis=1)[:, :4]
 tw = np.take_along_axis(flat, top, 1)
 tw = tw / np.maximum(tw.sum(1, keepdims=True), 1e-9)
 q = np.round(tw[:, :3] * 255).astype(np.int32)
 q[:, 2] = np.minimum(q[:, 2], 255 - q[:, 0] - q[:, 1]).clip(0)
-idx = (top[:, 0] | (top[:, 1] << 4) | (top[:, 2] << 8) | (top[:, 3] << 12)).astype('<u2')
-rec = np.zeros(len(flat), dtype=[('i', '<u2'), ('w', 'u1', 3)])
-rec['i'] = idx; rec['w'] = q.astype('u1')
-head = b'PXW1' + np.array([NX, NY, NZ, NB], '<u2').tobytes() + np.array([lo[0], lo[1], lo[2], H, 0], '<f4').tobytes()
+rec = np.zeros(len(flat), dtype=[('i', 'u1', 4), ('w', 'u1', 3)])
+rec['i'] = top.astype('u1'); rec['w'] = q.astype('u1')
+head = b'PXW2' + np.array([NX, NY, NZ, NB], '<u2').tobytes() + np.array([lo[0], lo[1], lo[2], H, 0], '<f4').tobytes()
 with open(out, 'wb') as f: f.write(head); f.write(rec.tobytes())
 print(f'packed {len(head) + rec.nbytes} bytes', flush=True)

@@ -5,7 +5,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, useProgress, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { SunPanel, SUN_POSES, toRaw, ease } from "./SunSalutation.jsx";
-import { buildPoseRig, loadProxyWeights, BONE_KEYS } from "./poseRig.js";
+import { buildPoseRig, loadProxyWeights, POSE_KEYS } from "./poseRig.js";
 import { FeedbackButton, FeedbackDialog, FeedbackAdmin } from "./Feedback.jsx";
 import { MUSCLES, matchMuscle, musclesForAsana, BREATHING_IDS, isConnectiveTissue } from "./muscles.js";
 
@@ -178,7 +178,7 @@ function Rig({ children, ready, homeRef }) {
 }
 
 // 태양경배 중엔 해부 모델 자체를 굽힌다. 처음 켤 때 한 번 자동 스키닝(1~2초).
-const REST_RAW = Object.fromEntries(BONE_KEYS.map((k) => [k, 0]));
+const REST_RAW = Object.fromEntries(POSE_KEYS.map((k) => [k, 0]));
 function AnatomyPoser({ layersRef, active, pose, roles, ready, onState }) {
   const rig = useRef(null);
   const cur = useRef(REST_RAW), from = useRef(REST_RAW), to = useRef(REST_RAW), t = useRef(1);
@@ -239,7 +239,7 @@ function AnatomyPoser({ layersRef, active, pose, roles, ready, onState }) {
     if (!rig.current || t.current >= 1.6) return;  // 1까지 자세 보간, 1.6까지 카메라 따라가기
     t.current = Math.min(1.6, t.current + dt / 1.1);
     const e = ease(Math.min(1, t.current)), a = from.current, b = to.current, c = {};
-    for (const k of BONE_KEYS) c[k] = (a[k] || 0) + ((b[k] || 0) - (a[k] || 0)) * e;
+    for (const k of POSE_KEYS) c[k] = (a[k] || 0) + ((b[k] || 0) - (a[k] || 0)) * e;
     cur.current = c;
     rig.current.apply(c);
     act.current = active ? e : 0;
