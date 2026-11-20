@@ -343,6 +343,18 @@ export function buildPoseRig(layers, options = {}) {
   const GAIN = 1.6;          // 눈에 보이도록 실제보다 조금 과장
   const ACTIVE_BULGE = 0.07; // 수축 역할 근육은 길이 변화가 없어도 힘이 들어간 듯 살짝 부풂
   const STRETCH_THIN = 0.06; // 신장 역할 근육은 길게 늘어난 듯 살짝 가늘게
+  const END_ZONE = 0.1;      // 길이를 잴 양 끝 구간(주축 비율)
+  const END_SAMPLES = 24;    // 끝 구간에서 고르게 뽑을 정점 수
+  const SHEET_RATIO = 0.4;   // 단면 두께/폭이 이보다 작으면 '넓적한 근육'(전거근·외복사근·광배근 등)
+  const sampleEnd = (aT, inZone) => {
+    const all = []; for (let i = 0; i < aT.length; i++) if (inZone(aT[i])) all.push(i);
+    if (all.length <= END_SAMPLES) return all;
+    const out = []; for (let k = 0; k < END_SAMPLES; k++) out.push(all[Math.floor((k * all.length) / END_SAMPLES)]);
+    return out;
+  };
+  const meanRest = (P, ids) => { const o = new THREE.Vector3(); for (const i of ids) o.add(_v.fromBufferAttribute(P, i)); return o.multiplyScalar(1 / ids.length); };
+  const _pp = new THREE.Vector3();
+  const meanPosed = (m, ids, out) => { out.set(0, 0, 0); for (const i of ids) out.add(m.getVertexPosition(i, _pp)); return out.multiplyScalar(1 / ids.length); };
   function setupMuscleDeform(list) {
     const c = new THREE.Vector3(), e = new THREE.Vector3(), t3 = new THREE.Vector3();
     for (const m of list || []) {
@@ -364,6 +376,16 @@ export function buildPoseRig(layers, options = {}) {
         if (t3.lengthSq() < 1e-20) break;
         e.copy(t3).normalize();
       }
+      // 주축에 수직인 단면의 두께(가장 얇은 방향 표준편차) — 넓적하거나 몸을 감싸는 근육은 법선 방향으로 굵기를 바꾼다
+      const ev = (v) => (xx * v.x * v.x + yy * v.y * v.y + zz * v.z * v.z + 2 * (xy * v.x * v.y + xz * v.x * v.z + yz * v.y * v.z)) / n;
+      const u1 = new THREE.Vector3(1, 0, 0); if (Math.abs(e.x) > 0.9) u1.set(0, 1, 0);
+      u1.sub(t3.copy(e).multiplyScalar(u1.dot(e))).normalize();
+      const u2 = new THREE.Vector3().crossVectors(e, u1);
+      // 단면 2×2 공분산의 고유값
+      const a11 = ev(u1), a22 = ev(u2), a12 = (xx * u1.x * u2.x + yy * u1.y * u2.y + zz * u1.z * u2.z +
+        xy * (u1.x * u2.y + u1.y * u2.x) + xz * (u1.x * u2.z + u1.z * u2.x) + yz * (u1.y * u2.z + u1.z * u2.y)) / n;
+      const tr = (a11 + a22) / 2, det = Math.sqrt(Math.max(0, ((a11 - a22) / 2) ** 2 + a12 * a12));
+      const thin = Math.sqrt(Math.max(tr - det, 0)), wide = Math.sqrt(tr + det);
       let dMin = Infinity, dMax = -Infinity, ia = 0, ib = 0;
       const d = new Float32Array(n);
       for (let i = 0; i < n; i++) {
@@ -376,8 +398,15 @@ export function buildPoseRig(layers, options = {}) {
       const aT = new Float32Array(n);
       for (let i = 0; i < n; i++) aT[i] = (d[i] - dMin) / span;
       m.geometry.setAttribute("aMusT", new THREE.BufferAttribute(aT, 1));
-      const A = new THREE.Vector3().fromBufferAttribute(P, ia), Bv = new THREE.Vector3().fromBufferAttribute(P, ib);
-      const mus = { ia, ib, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 } };
+      // 양 끝 길이는 정점 하나가 아니라 끝 구간(주축 10%) 정점 여럿의 평균으로 잰다
+      // → 끝 정점 하나에 팔·목 웨이트가 섞여 있어도 길이가 크게 틀어지지 않게
+      const endA = sampleEnd(aT, (t) => t <= END_ZONE), endB = sampleEnd(aT, (t) => t >= 1 - END_ZONE);
+      if (!endA.length || !endB.length) { endA.push(ia); endB.push(ib); }
+      const A = meanRest(P, endA), Bv = meanRest(P, endB);
+      // 넓적한(단면이 납작한) 근육은 직선 축 기준 확대가 근육을 통째로 밀어내거나 꺼뜨리므로 표면 법선 방향으로
+      const sheet = thin < SHEET_RATIO * wide;
+      const mus = { endA, endB, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 },
+        uSheet: { value: sheet ? 1 : 0 }, uThick: { value: Math.min(thin * 1.5, 0.008) } };
       m.userData.mus = mus;
       patchMaterial(m.material, mus);
       musc.push(m);
@@ -388,8 +417,8 @@ export function buildPoseRig(layers, options = {}) {
   function updateMuscles(roles, act = 0) {
     for (const m of musc) {
       const u = m.userData.mus;
-      m.getVertexPosition(u.ia, u.uA.value);
-      m.getVertexPosition(u.ib, u.uB.value);
+      meanPosed(m, u.endA, u.uA.value);
+      meanPosed(m, u.endB, u.uB.value);
       const L = u.uA.value.distanceTo(u.uB.value);
       let k = (Math.sqrt(u.L0 / Math.max(L, 1e-6)) - 1) * GAIN;
       k = Math.min(0.5, Math.max(-0.35, k));
@@ -461,18 +490,24 @@ export function buildPoseRig(layers, options = {}) {
 function patchMaterial(mat, mus) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uMusA = mus.uA; shader.uniforms.uMusB = mus.uB; shader.uniforms.uMusS = mus.uS;
+    shader.uniforms.uMusSheet = mus.uSheet; shader.uniforms.uMusThick = mus.uThick;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;")
+      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;\nuniform float uMusSheet;\nuniform float uMusThick;")
       .replace("#include <skinning_vertex>", `#include <skinning_vertex>
       {
-        vec3 musAB = uMusB - uMusA;
-        float musLL = max(dot(musAB, musAB), 1e-10);
-        vec3 musP = uMusA + musAB * (dot(transformed - uMusA, musAB) / musLL);
         float musBelly = sin(3.14159265 * clamp(aMusT, 0.0, 1.0));
-        transformed = musP + (transformed - musP) * (1.0 + uMusS * musBelly);
+        if (uMusSheet > 0.5) {
+          // 넓적한 근육: 겉면은 바깥으로, 안쪽 면은 안으로(법선 방향) 근육 두께만큼만 → 제자리에서 두꺼워지고 얇아진다
+          transformed += normalize(objectNormal) * (uMusS * musBelly * uMusThick);
+        } else {
+          vec3 musAB = uMusB - uMusA;
+          float musLL = max(dot(musAB, musAB), 1e-10);
+          vec3 musP = uMusA + musAB * (dot(transformed - uMusA, musAB) / musLL);
+          transformed = musP + (transformed - musP) * (1.0 + uMusS * musBelly);
+        }
       }`);
   };
-  mat.customProgramCacheKey = () => "muscle-volume-v1";
+  mat.customProgramCacheKey = () => "muscle-volume-v2";
   mat.needsUpdate = true;
 }
 
