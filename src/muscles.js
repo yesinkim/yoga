@@ -926,6 +926,7 @@ export function isConnectiveTissue(rawName) {
 export function matchMuscle(rawName) {
   if (!rawName) return null;
   const n = String(rawName).toLowerCase().replace(/[._\-]+/g, " ");
+  if (n.includes("bursa")) return null; // 점액낭(힘줄 밑 물주머니)은 근육이 아님 — "…bursa of trapezius" 등이 근육으로 칠해지지 않게
   for (const m of MUSCLES) {
     for (const k of m.matchers) {
       if (n.includes(k.toLowerCase())) return m;

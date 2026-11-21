@@ -72,9 +72,16 @@ function landmarks(boneMeshes, invF) {
     J["toe" + S] = new THREE.Vector3(c(tibia).x + s * 0.01, heelY, J["heel" + S].z + 0.25);
     J["sh" + S] = new THREE.Vector3(s * (inner(hum) + 0.3 * w(hum)), hum.max.y - 0.03, c(hum).z);
     J["el" + S] = new THREE.Vector3(c(fore).x, hum.min.y + 0.02, c(fore).z);
-    J["wr" + S] = new THREE.Vector3(c(fore).x, fore.min.y, c(fore).z);
+    // 손목: 손목뼈 근위열(반달·손배뼈) 중심 — 아래팔뼈 상자 바닥(자뼈 붓돌기)보다 정확(손이 덜 꺾이던 원인)
+    const carp = findBox(bones, /^(lunate|scaphoid)/i, s);
+    J["wr" + S] = carp ? new THREE.Vector3(c(carp).x, carp.max.y - 0.006, c(carp).z) : new THREE.Vector3(c(fore).x, fore.min.y, c(fore).z);
+    // 손끝·손바닥: 실제 손뼈에서(쉬는 자세 손은 손바닥 쪽으로 20°쯤 말려 있다)
+    const tip = findBox(bones, /^distal_phalanx_of_third_finger_of_hand/i, s);
+    const mc3 = findBox(bones, /^third_metacarpal/i, s);
     const dir = J["wr" + S].clone().sub(J["el" + S]).normalize();
-    J["hand" + S] = J["wr" + S].clone().addScaledVector(dir, 0.19);
+    J["hand" + S] = tip ? new THREE.Vector3(c(tip).x, tip.min.y, c(tip).z) : J["wr" + S].clone().addScaledVector(dir, 0.19);
+    J["knuck" + S] = mc3 ? new THREE.Vector3(c(mc3).x, mc3.min.y + 0.005, mc3.max.z + 0.008) : J["hand" + S].clone();
+    J["heelHand" + S] = J["wr" + S].clone().add(new THREE.Vector3(0, -0.015, 0.025)); // 손바닥 뒤꿈치(손목뼈 앞면 + 살)
   }
   const vert = (re, fallbackY) => {
     const b = findBox(bones, re, 0);
@@ -163,6 +170,12 @@ export function buildPoseRig(layers, options = {}) {
   // ── 웨이트용 선분 (뼈 인덱스별) ──
   const idx = Object.fromEntries(BONE_KEYS.map((k, i) => [k, i]));
   const mid = (a, b, t) => a.clone().lerp(b, t);
+  // 쉬는 자세 손의 말림 각(아래팔 축 대비, 옆면) — 손바닥을 바닥에 짚을 때 이만큼 더 젖혀야 평평해진다
+  const handTilt = {};
+  for (const S of ["L", "R"]) {
+    const f = J["wr" + S].clone().sub(J["el" + S]), h = J["hand" + S].clone().sub(J["wr" + S]);
+    handTilt[S] = Math.atan2(h.z, -h.y) - Math.atan2(f.z, -f.y); // 라디안, +면 손가락이 앞으로 말림
+  }
   const segs = [
     [idx.root, J.hipL, J.hipR], [idx.root, J.pelvis, J.L5],
     [idx.spine, J.L5, J.T12],
@@ -292,9 +305,9 @@ export function buildPoseRig(layers, options = {}) {
   const WRIST_BLEND = 0.02, WRIST_SHIFT = 0.01; // 손목뼈(손목관절 바로 아래)부터 손으로 — 축 위 관절보다 1cm 몸쪽에서 섞기 시작
   const wristAxis = {};
   for (const S of ["L", "R"]) {
-    const a = J["el" + S], d = J["hand" + S].clone().sub(a), len = d.length();
+    const a = J["el" + S], d = J["wr" + S].clone().sub(a);
     d.normalize();
-    wristAxis[S] = { a, d, tw: J["wr" + S].clone().sub(a).dot(d), len, el: idx["el" + S], wr: idx["wr" + S] };
+    wristAxis[S] = { a, d, tw: J["wr" + S].clone().sub(a).dot(d), el: idx["el" + S], wr: idx["wr" + S] };
   }
   function wristSplit(v, out) {
     for (const S of ["L", "R"]) {
@@ -443,6 +456,23 @@ export function buildPoseRig(layers, options = {}) {
     }
   }
   setupMuscleDeform(layers.muscle.meshes);
+  // 한 근육이 메시 여러 조각("…_muscle", "…_muscle_1")으로 나뉜 경우 같은 굵기 변화를 쓰게 묶는다
+  // (조각마다 따로 재면 광배근이 17%·11%처럼 달라져 경계에 턱이 생김) — 대표는 정점이 가장 많은 조각
+  const musGroups = new Map();
+  for (const m of musc) {
+    const base = (m.name || "").replace(/(_\d+)+$/, "");
+    m.geometry.computeBoundingBox();
+    const cx = m.geometry.boundingBox.getCenter(_v).applyMatrix4(m.matrixWorld).applyMatrix4(invF).x;
+    const key = base + (cx < 0 ? "|L" : "|R");
+    if (!musGroups.has(key)) musGroups.set(key, []);
+    musGroups.get(key).push(m);
+  }
+  const musLead = new Map(); // 메시 → 대표 메시
+  for (const g of musGroups.values()) {
+    let lead = g[0];
+    for (const m of g) if (m.geometry.attributes.position.count > lead.geometry.attributes.position.count) lead = m;
+    for (const m of g) musLead.set(m, lead);
+  }
   // 매 프레임(자세 보간 중) 호출: roles = Map(근육 id → "c"|"s"), act 0~1 = 수축 힘 표시 세기
   function updateMuscles(roles, act = 0) {
     for (const m of musc) {
@@ -459,6 +489,7 @@ export function buildPoseRig(layers, options = {}) {
       else if (role === "s") k = Math.min(k, 0) - STRETCH_THIN * act;
       u.uS.value = k;
     }
+    for (const m of musc) { const lead = musLead.get(m); if (lead !== m) m.userData.mus.uS.value = lead.userData.mus.uS.value; }
   }
 
   // ── 접지용 표면 탐침(뼈에 붙은 점) ──
@@ -466,7 +497,7 @@ export function buildPoseRig(layers, options = {}) {
   const probe = (bone, p) => { const o = new THREE.Object3D(); o.position.copy(p).sub(pos[bone]); B[bone].add(o); probes.push(o); };
   for (const S of ["L", "R"]) {
     probe("ank" + S, J["heel" + S]); probe("ank" + S, J["toe" + S]);
-    probe("wr" + S, J["hand" + S]); probe("wr" + S, J["wr" + S]); // 손끝·손목(손바닥 뒤꿈치)
+    probe("wr" + S, J["hand" + S]); probe("wr" + S, J["knuck" + S]); probe("wr" + S, J["heelHand" + S]); // 손끝·손허리뼈 머리·손바닥 뒤꿈치
     probe("el" + S, J["el" + S].clone().add(new THREE.Vector3(0, 0, -0.04)));
     probe("knee" + S, J["knee" + S].clone().add(new THREE.Vector3(0, 0, 0.06)));
     probe("hip" + S, mid(J["hip" + S], J["knee" + S], 0.5).add(new THREE.Vector3(0, 0, 0.07)));
@@ -498,6 +529,7 @@ export function buildPoseRig(layers, options = {}) {
       const tw = (raw["tw" + S] || 0) * D;
       B["el" + S].rotation.y = tw * 0.5;
       B["wr" + S].rotation.y = tw * 0.5;
+      B["wr" + S].rotation.x += handTilt[S] * (tw / Math.PI); // 엎친 만큼 손 말림을 보정(손바닥 평평하게)
     }
     for (const S of ["L", "R"]) { // 팔 회전을 어깨띠와 어깨 관절에 나눠 준다
       const a = (raw["sh" + S] || 0) * D;

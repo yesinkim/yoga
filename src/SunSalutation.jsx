@@ -40,42 +40,50 @@ const sym = (o) => ({
 const SAMA = sym({ lean: 0, spine: 0, chest: 0, neck: 0, arm: 3, elbow: 5, hip: 0, knee: 0, foot: 0 });
 const URDHVA_HASTA = sym({ lean: 0, spine: -5, chest: -8, neck: -20, arm: 167, elbow: 0, hip: 0, knee: 0, foot: 0 });
 // 골반을 깊게 접고 정수리는 바닥으로, 손바닥은 발 옆 바닥에(발이 뜨지 않게 팔 각도를 맞춤)
-const UTTANA = sym({ lean: 110, spine: 28, chest: 20, neck: 15, arm: 140, elbow: 0, hip: 110, knee: 0, foot: 0, hand: 90 });
+const UTTANA = sym({ lean: 105, spine: 28, chest: 20, neck: 15, arm: 130, elbow: 0, hip: 105, knee: 0, foot: 0, hand: 90 });
 // 무릎은 펴고 골반을 깊게 접어 등은 평평하게, 손끝은 발 옆 바닥에(손바닥은 뒤를 봄)
-const ARDHA_UTTANA = sym({ lean: 110, spine: 0, chest: 0, neck: -45, arm: 80, elbow: 0, hip: 110, knee: 0, foot: 0, hand: 0 });
+const ARDHA_UTTANA = sym({ lean: 115, spine: 0, chest: 0, neck: -45, arm: 90, elbow: 0, hip: 115, knee: 0, foot: 0, hand: 0 });
 const CHATURANGA = sym({ lean: 86, spine: 0, chest: 0, neck: -5, arm: -5, elbow: 91, hip: 0, knee: 0, foot: 60, hand: 90 });
-const URDHVA_MUKHA = sym({ lean: 79, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: 5, knee: 0, foot: 170, hand: 90 });
-const ADHO_MUKHA = sym({ lean: 120, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 75, knee: 0, foot: 0, hand: 90 });
+const URDHVA_MUKHA = sym({ lean: 81, spine: -30, chest: -25, neck: -20, arm: 25, elbow: 0, hip: 10, knee: 0, foot: 170, hand: 90 });
+const ADHO_MUKHA = sym({ lean: 120, spine: 5, chest: 5, neck: 5, arm: 180, elbow: 0, hip: 80, knee: 0, foot: 0, hand: 90 });
 
 // 동작별 근육 역할 — c: 수축(힘을 쓰는 근육), s: 신장(늘어나는 근육)
 const ROLE = {
-  sama: {
-    c: ["rectus_femoris", "vastus_medialis", "vastus_lateralis", "gluteus_med", "transversus", "longissimus"],
+  sama: { // 발바닥으로 바닥을 누르고 무릎뼈를 끌어올리며, 꼬리뼈를 내리고 척추를 길게
+    c: ["rectus_femoris", "vastus_medialis", "vastus_lateralis", "vastus_intermedius", "gluteus_med", "adductor_magnus",
+      "soleus", "transversus", "multifidus", "longissimus"],
     s: [],
   },
-  urdhvaHasta: {
-    c: ["deltoid", "trapezius", "serratus", "triceps", "longissimus"],
-    s: ["latissimus", "pectoralis", "rectus_abdominis", "external_oblique"],
+  urdhvaHasta: { // 팔을 귀 옆으로 — 어깨뼈 위쪽 돌림(승모근·전거근), 팔꿈치 펴기, 옆구리·가슴 앞이 늘어남
+    c: ["deltoid", "supraspinatus", "trapezius", "serratus", "triceps", "longissimus", "multifidus"],
+    s: ["latissimus", "teres_major", "pectoralis", "pectoralis_minor", "rectus_abdominis", "external_oblique"],
   },
-  uttana: {
-    c: ["rectus_femoris", "vastus_medialis", "vastus_lateralis", "iliopsoas"],
-    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "gluteus_max", "longissimus", "iliocostalis"],
+  uttana: { // 골반부터 접기 — 넙다리 앞이 무릎을 펴서 잡고, 다리 뒤·엉덩이·등 전체가 늘어남
+    c: ["rectus_femoris", "vastus_medialis", "vastus_lateralis", "vastus_intermedius", "iliopsoas"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "adductor_magnus", "gastrocnemius", "soleus",
+      "gluteus_max", "longissimus", "iliocostalis", "quadratus_lumborum"],
   },
-  ardha: {
-    c: ["longissimus", "iliocostalis", "multifidus", "rhomboid_major", "trapezius", "rectus_femoris"],
-    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius"],
+  ardha: { // 등을 평평하게 — 척추세움근·어깨뼈 모음근이 버티고, 다리 뒤는 계속 늘어남
+    c: ["longissimus", "iliocostalis", "multifidus", "rhomboid_major", "trapezius", "iliopsoas",
+      "rectus_femoris", "vastus_medialis", "vastus_lateralis"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "adductor_magnus", "gastrocnemius", "gluteus_max"],
   },
-  chaturanga: {
-    c: ["triceps", "pectoralis", "serratus", "deltoid", "rectus_abdominis", "transversus", "external_oblique", "rectus_femoris", "vastus_medialis"],
-    s: [],
+  chaturanga: { // 팔굽혀 버티기 — 가슴·삼두·전거근, 몸통을 판자처럼(복근), 손목은 젖혀져 손바닥 쪽이 늘어남
+    c: ["triceps", "pectoralis", "serratus", "deltoid", "biceps", "rectus_abdominis", "transversus",
+      "external_oblique", "internal_oblique", "rectus_femoris", "vastus_medialis"],
+    s: ["flexor_carpi_radialis", "flexor_carpi_ulnaris", "flexor_digitorum_superficialis"],
   },
-  urdhvaMukha: {
-    c: ["triceps", "longissimus", "iliocostalis", "multifidus", "gluteus_max", "trapezius", "rhomboid_major", "vastus_lateralis"],
-    s: ["rectus_abdominis", "external_oblique", "iliopsoas", "rectus_femoris", "pectoralis"],
+  urdhvaMukha: { // 가슴을 열고 위로 — 등 뒤쪽 전체와 삼두가 일하고, 몸 앞면·발등·손목 앞이 늘어남
+    c: ["triceps", "longissimus", "iliocostalis", "multifidus", "gluteus_max", "trapezius", "rhomboid_major",
+      "serratus", "vastus_lateralis", "vastus_medialis"],
+    s: ["rectus_abdominis", "external_oblique", "iliopsoas", "rectus_femoris", "pectoralis", "pectoralis_minor",
+      "tibialis_anterior", "flexor_carpi_radialis", "flexor_carpi_ulnaris"],
   },
-  adhoMukha: {
-    c: ["deltoid", "triceps", "serratus", "trapezius", "rectus_femoris", "vastus_medialis", "transversus"],
-    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "gluteus_max", "latissimus"],
+  adhoMukha: { // 엉덩이를 높이 — 팔로 바닥을 밀고(삼각·삼두·전거근, 팔 바깥돌림), 다리 뒤·광배근·손목 앞이 늘어남
+    c: ["deltoid", "triceps", "serratus", "trapezius", "infraspinatus", "teres_minor", "rectus_femoris",
+      "vastus_medialis", "vastus_lateralis", "transversus", "tibialis_anterior"],
+    s: ["biceps_femoris", "semitendinosus", "semimembranosus", "gastrocnemius", "soleus", "gluteus_max",
+      "latissimus", "teres_major", "flexor_carpi_radialis", "flexor_carpi_ulnaris"],
   },
 };
 
