@@ -340,6 +340,63 @@ export function buildPoseRig(layers, options = {}) {
       out[k.sh] = tot * w; out[k.cl] = tot * (1 - w); out[idx.chest] = 0; out[idx.neck] = 0;
     }
   }
+  // ── 겨드랑이 벽 근육(대흉근·광배근·큰원근): 근섬유 변형 ──
+  // 이 근육들은 몸통(기시)에서 위팔뼈(정지)로 부채꼴로 건너간다. 뼈 웨이트를 섞으면 팔을 머리 위로 들 때(≈170°)
+  // 위팔 쪽 끝이 가슴에 남아 턱이 지거나(몸통 웨이트), 가운데가 관절 쪽으로 오그라들어 구겨진다(선형 섞기).
+  // 대신 정점마다 자기 근섬유의 기시점 O(몸통을 따라감)와 정지점 I(위팔을 따라감)를 기록해 두고,
+  // 셰이더에서 섬유를 O′→I′ 직선으로 늘려 그 위의 같은 비율 자리에 놓는다 → 팔을 들면 가슴·옆구리에서 팔까지 막처럼 이어진다.
+  // 정지점은 위팔뼈 한 점(부채의 꼭짓점), 기시점은 그 꼭짓점에서 정점 방향으로 근육이 가장 멀리 뻗은 끝.
+  const FIBER = {
+    pectoralis: { f: 0.2, dz: 0.012 },   // 결절사이고랑 가쪽 입술(위팔뼈 앞)
+    latissimus: { f: 0.17, dz: 0.0 },    // 결절사이고랑 바닥
+    teres_major: { f: 0.15, dz: -0.006 }, // 결절사이고랑 안쪽 입술
+  };
+  const FB = 40; // 방향 칸 수(각 축)
+  const fibIns = (id, S) => J["sh" + S].clone().lerp(J["el" + S], FIBER[id].f)
+    .add(new THREE.Vector3((S === "L" ? -1 : 1) * (FIBER[id].dx || 0), 0, FIBER[id].dz));
+  const fibBin = (u) => {
+    const th = Math.atan2(u.z, u.x), ph = Math.acos(Math.max(-1, Math.min(1, u.y)));
+    return Math.min(FB - 1, ((th + Math.PI) / (2 * Math.PI)) * FB | 0) * FB + Math.min(FB - 1, (ph / Math.PI) * FB | 0);
+  };
+  // 칸 경계에서 기시점이 튀면 근육 안팎 면이 서로 다른 섬유를 타고 엇갈려 얼룩이 생긴다 → 칸 중심 사이를 이중선형 보간
+  const fibR = (rmax, u) => {
+    const th = Math.atan2(u.z, u.x), ph = Math.acos(Math.max(-1, Math.min(1, u.y)));
+    const fa = ((th + Math.PI) / (2 * Math.PI)) * FB - 0.5, fc = Math.min(FB - 1, Math.max(0, (ph / Math.PI) * FB - 0.5));
+    const a0 = Math.floor(fa), c0 = Math.min(FB - 2, Math.floor(fc)), ta = fa - a0, tc = fc - c0;
+    const A0 = (a0 + FB) % FB, A1 = (a0 + 1 + FB) % FB;
+    return (rmax[A0 * FB + c0] * (1 - tc) + rmax[A0 * FB + c0 + 1] * tc) * (1 - ta) + (rmax[A1 * FB + c0] * (1 - tc) + rmax[A1 * FB + c0 + 1] * tc) * ta;
+  };
+  const fibSide = (x) => (x < 0 ? "L" : "R");
+  function fiberTables(list) {
+    const tabs = new Map(); // id|S → { I, rmax }
+    for (const m of list) {
+      const id = m.userData.muscleId || ""; if (!FIBER[id]) continue;
+      _m.multiplyMatrices(invF, m.matrixWorld);
+      const P = m.geometry.attributes.position;
+      for (let i = 0; i < P.count; i++) {
+        _v.fromBufferAttribute(P, i).applyMatrix4(_m);
+        const S = fibSide(_v.x), key = id + "|" + S;
+        let tb = tabs.get(key);
+        if (!tb) tabs.set(key, (tb = { I: fibIns(id, S), rmax: new Float32Array(FB * FB) }));
+        _v.sub(tb.I); const r = _v.length(); if (r < 1e-6) continue;
+        const b = fibBin(_v.multiplyScalar(1 / r));
+        if (r > tb.rmax[b]) tb.rmax[b] = r;
+      }
+    }
+    for (const tb of tabs.values()) { // 이웃 칸 최대값으로 넓혀 빈 칸·들쭉날쭉한 끝을 메운다
+      const src = tb.rmax.slice();
+      for (let a = 0; a < FB; a++) for (let c = 0; c < FB; c++) {
+        let mx = 0;
+        for (let da = -1; da <= 1; da++) for (let dc = -1; dc <= 1; dc++) {
+          const aa = (a + da + FB) % FB, cc = c + dc; if (cc < 0 || cc >= FB) continue;
+          mx = Math.max(mx, src[aa * FB + cc]);
+        }
+        tb.rmax[a * FB + c] = mx;
+      }
+    }
+    return tabs;
+  }
+  const _o = new THREE.Vector3(), _mi = new THREE.Matrix4();
   const done = new Map(); // geometry → matrix(중복 공유 지오메트리 처리)
   const all = [];
   // 아직 스키닝 안 된 메시에 웨이트를 계산해 붙인다(나중에 로드된 피부도 여기로)
@@ -357,6 +414,7 @@ export function buildPoseRig(layers, options = {}) {
     all.push(...fresh);
   }
   function skinMeshes(list) {
+  const fibTabs = fiberTables(list);
   for (const m of list) {
     _m.multiplyMatrices(invF, m.matrixWorld);
     if (done.has(m.geometry) && !done.get(m.geometry).equals(_m)) m.geometry = m.geometry.clone();
@@ -367,12 +425,30 @@ export function buildPoseRig(layers, options = {}) {
     const si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
     const votes = new Uint32Array(BONE_KEYS.length);
     const shoulderMus = SHOULDER_RE.test(m.userData.muscleId || "");
+    const fibId = FIBER[m.userData.muscleId || ""] ? m.userData.muscleId : null;
+    let fO, fI, fB;
+    if (fibId) { fO = new Float32Array(n * 3); fI = new Float32Array(n * 3); fB = new Float32Array(n); _mi.copy(_m).invert(); }
     for (let i = 0; i < n; i++) {
       _v.fromBufferAttribute(P, i).applyMatrix4(_m);
+      if (fibId) { // 기시점 O를 찾아 그 자리의 몸통 웨이트를 쓴다(정점 자체는 셰이더가 O′→I′ 섬유 위에 놓음)
+        const S = fibSide(_v.x), tb = fibTabs.get(fibId + "|" + S);
+        _o.copy(_v).sub(tb.I); const r = _o.length() || 1e-6; _o.multiplyScalar(1 / r);
+        const rm = Math.max(fibR(tb.rmax, _o), r);
+        _o.multiplyScalar(rm).add(tb.I);
+        _v2.copy(_o).applyMatrix4(_mi); fO[i * 3] = _v2.x; fO[i * 3 + 1] = _v2.y; fO[i * 3 + 2] = _v2.z;
+        _v2.copy(tb.I).applyMatrix4(_mi); fI[i * 3] = _v2.x; fI[i * 3 + 1] = _v2.y; fI[i * 3 + 2] = _v2.z;
+        fB[i] = idx["sh" + S];
+        _v.copy(_o);
+      }
       if (field) sampleField(_v, acc); else pointWeights(_v, acc);
       allowMask(_v, acc); // 좌우·팔다리 구분은 흐린 뒤에도 지킨다
+      if (fibId) { // 기시점 웨이트에서 같은 쪽 팔 몫은 뺀다(기시는 몸통·어깨띠에 있다)
+        const s = _v.x < 0 ? -1 : 1; let sum = 0;
+        for (let b = 0; b < NB; b++) { if (kind[b] === 1 && side[b] === s) acc[b] = 0; sum += acc[b]; }
+        if (sum > 0) for (let b = 0; b < NB; b++) acc[b] /= sum; else acc[idx.chest] = 1;
+      }
       wristSplit(_v, acc);
-      if (shoulderMus) shoulderSplit(_v, acc);
+      if (shoulderMus && !fibId) shoulderSplit(_v, acc);
       // 가장 큰 네 뼈만 남겨 정규화
       const top = [-1, -1, -1, -1];
       for (let b = 0; b < NB; b++) {
@@ -391,6 +467,12 @@ export function buildPoseRig(layers, options = {}) {
         sw[i * 4 + t] = q; used += q;
       }
       votes[top[0]]++;
+    }
+    if (fibId) {
+      g.setAttribute("aFibO", new THREE.BufferAttribute(fO, 3));
+      g.setAttribute("aFibI", new THREE.BufferAttribute(fI, 3));
+      g.setAttribute("aFibB", new THREE.BufferAttribute(fB, 1));
+      m.userData.fiber = true;
     }
     g.setAttribute("skinIndex", new THREE.Uint8BufferAttribute(si, 4));
     g.setAttribute("skinWeight", new THREE.Uint8BufferAttribute(sw, 4, true));
@@ -420,7 +502,34 @@ export function buildPoseRig(layers, options = {}) {
   };
   const meanRest = (P, ids) => { const o = new THREE.Vector3(); for (const i of ids) o.add(_v.fromBufferAttribute(P, i)); return o.multiplyScalar(1 / ids.length); };
   const _pp = new THREE.Vector3();
-  const meanPosed = (m, ids, out) => { out.set(0, 0, 0); for (const i of ids) out.add(m.getVertexPosition(i, _pp)); return out.multiplyScalar(1 / ids.length); };
+  // 근섬유 변형 근육은 셰이더와 같은 계산으로 자세 위치를 낸다(길이·축이 실제 화면과 맞게)
+  const _sk = new THREE.Matrix4(), _bm = new THREE.Matrix4(), _ta = new THREE.Matrix4();
+  const _fO = new THREE.Vector3(), _fI = new THREE.Vector3(), _f0 = new THREE.Vector3(), _f1 = new THREE.Vector3(), _fn = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fa = new THREE.Vector3();
+  const boneMat = (m, b, out) => out.multiplyMatrices(m.skeleton.bones[b].matrixWorld, m.skeleton.boneInverses[b]);
+  function fiberVertex(m, i, out) {
+    const g = m.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+    _sk.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for (let t = 0; t < 4; t++) {
+      const w = sw.getComponent(i, t); if (!w) continue;
+      boneMat(m, si.getComponent(i, t), _bm);
+      for (let e = 0; e < 16; e++) _sk.elements[e] += _bm.elements[e] * w;
+    }
+    _sk.premultiply(m.bindMatrixInverse).multiply(m.bindMatrix);
+    boneMat(m, g.attributes.aFibB.getX(i), _ta).premultiply(m.bindMatrixInverse).multiply(m.bindMatrix);
+    _fO.fromBufferAttribute(g.attributes.aFibO, i); _fI.fromBufferAttribute(g.attributes.aFibI, i);
+    _f0.subVectors(_fI, _fO);
+    const p = _fa.fromBufferAttribute(g.attributes.position, i);
+    const a = Math.min(1, Math.max(0, p.clone().sub(_fO).dot(_f0) / Math.max(_f0.lengthSq(), 1e-10)));
+    _fn.copy(p).sub(_fO).addScaledVector(_f0, -a).transformDirection(_sk).multiplyScalar(p.clone().sub(_fO).addScaledVector(_f0, -a).length());
+    const O1 = _fO.clone().applyMatrix4(_sk), I1 = _fI.clone().applyMatrix4(_ta);
+    _f1.subVectors(I1, O1);
+    _fq.setFromUnitVectors(_f0.clone().transformDirection(_sk), _f1.clone().normalize());
+    const nr = _fn.clone().applyQuaternion(_fq);
+    out.copy(O1).addScaledVector(_f1, a).add(_fn.lerp(nr, a));
+    return out; // 물체 좌표(getVertexPosition과 같음)
+  }
+  const posedVertex = (m, i, out) => (m.userData.fiber ? fiberVertex(m, i, out) : m.getVertexPosition(i, out));
+  const meanPosed = (m, ids, out) => { out.set(0, 0, 0); for (const i of ids) out.add(posedVertex(m, i, _pp)); return out.multiplyScalar(1 / ids.length); };
   function setupMuscleDeform(list) {
     const c = new THREE.Vector3(), e = new THREE.Vector3(), t3 = new THREE.Vector3();
     for (const m of list || []) {
@@ -471,7 +580,7 @@ export function buildPoseRig(layers, options = {}) {
       const A = meanRest(P, endA), Bv = meanRest(P, endB);
       // 넓적한(단면이 납작한) 근육은 직선 축 기준 확대가 근육을 통째로 밀어내거나 꺼뜨리므로 표면 법선 방향으로
       const sheet = thin < SHEET_RATIO * wide;
-      const mus = { endA, endB, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 },
+      const mus = { fiber: !!m.userData.fiber, endA, endB, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 },
         uSheet: { value: sheet ? 1 : 0 }, uThick: { value: Math.min(thin * 1.5, shellHalfThickness(m.geometry), 0.008) } };
       m.userData.mus = mus;
       patchMaterial(m.material, mus);
@@ -504,7 +613,7 @@ export function buildPoseRig(layers, options = {}) {
       meanPosed(m, u.endB, u.uB.value);
       const L = u.uA.value.distanceTo(u.uB.value);
       let k = (Math.sqrt(u.L0 / Math.max(L, 1e-6)) - 1) * GAIN;
-      k = Math.min(0.3, Math.max(-0.35, k)); // 굵어지는 쪽은 +30%까지(삼각근이 달걀처럼 부풀지 않게)
+      k = Math.min(SHOULDER_RE.test(m.userData.muscleId || "") ? 0.12 : 0.3, Math.max(-0.35, k)); // 굵어지는 쪽은 +30%까지, 어깨를 덮는 근육은 +12%(삼각근이 풍선처럼 부풀지 않게)
       // 동작별 역할(해부학 기준)로 방향을 바로잡는다: 단순 회전 관절이라 관절 바로 옆 근육(대둔근·햄스트링 등)은
       // 길이 변화가 틀리게 잡힐 수 있음. 수축 → 굵어지는 쪽만, 신장 → 가늘어지는 쪽만.
       const role = roles && act > 0 ? roles.get(m.userData.muscleId) : null;
@@ -600,13 +709,44 @@ function shellHalfThickness(g) {
   return Math.abs(vol) / area; // = 두께/2
 }
 
+// 근섬유 변형: 기시 O는 정점의 스킨 행렬(몸통)로, 정지 I는 위팔 뼈로 옮기고, 정점을 O′→I′ 위 같은 비율 자리에 놓는다.
+// 섬유에서 벗어난 성분(두께 방향)은 몸통 회전 → 섬유가 돈 만큼의 회전으로, 정지점에 가까울수록 더 돌린다.
+const FIBER_GLSL_PARS = `
+attribute vec3 aFibO;
+attribute vec3 aFibI;
+attribute float aFibB;
+vec4 musQuatFromTo(vec3 a, vec3 b) {
+  float d = dot(a, b);
+  if (d < -0.9999) return vec4(normalize(abs(a.x) > 0.9 ? cross(a, vec3(0.0, 1.0, 0.0)) : cross(a, vec3(1.0, 0.0, 0.0))), 0.0);
+  return normalize(vec4(cross(a, b), 1.0 + d));
+}
+vec3 musQuatRot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
+`;
+const FIBER_GLSL_NORMAL = `
+  mat4 fibTa = bindMatrixInverse * getBoneMatrix(aFibB) * bindMatrix;
+  vec3 fibO1 = (skinMatrix * vec4(aFibO, 1.0)).xyz;
+  vec3 fibI1 = (fibTa * vec4(aFibI, 1.0)).xyz;
+  vec3 fibF0 = aFibI - aFibO;
+  vec3 fibF1 = fibI1 - fibO1;
+  vec4 fibQ = musQuatFromTo(normalize((skinMatrix * vec4(fibF0, 0.0)).xyz), normalize(fibF1));
+  float fibA = clamp(dot(position - aFibO, fibF0) / max(dot(fibF0, fibF0), 1e-10), 0.0, 1.0);
+  objectNormal = normalize(mix(objectNormal, musQuatRot(fibQ, objectNormal), fibA));
+`;
+const FIBER_GLSL_POS = `
+      {
+        vec3 fibN0 = position - aFibO - fibA * fibF0;
+        vec3 fibNb = (skinMatrix * vec4(fibN0, 0.0)).xyz;
+        transformed = fibO1 + fibA * fibF1 + mix(fibNb, musQuatRot(fibQ, fibNb), fibA);
+      }`;
+
 function patchMaterial(mat, mus) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uMusA = mus.uA; shader.uniforms.uMusB = mus.uB; shader.uniforms.uMusS = mus.uS;
     shader.uniforms.uMusSheet = mus.uSheet; shader.uniforms.uMusThick = mus.uThick;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;\nuniform float uMusSheet;\nuniform float uMusThick;")
-      .replace("#include <skinning_vertex>", `#include <skinning_vertex>
+      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;\nuniform float uMusSheet;\nuniform float uMusThick;" + (mus.fiber ? FIBER_GLSL_PARS : ""))
+      .replace("#include <skinnormal_vertex>", "#include <skinnormal_vertex>" + (mus.fiber ? FIBER_GLSL_NORMAL : ""))
+      .replace("#include <skinning_vertex>", `#include <skinning_vertex>${mus.fiber ? FIBER_GLSL_POS : ""}
       {
         float musBelly = sin(3.14159265 * clamp(aMusT, 0.0, 1.0));
         if (uMusSheet > 0.5) {
@@ -620,7 +760,7 @@ function patchMaterial(mat, mus) {
         }
       }`);
   };
-  mat.customProgramCacheKey = () => "muscle-volume-v2";
+  mat.customProgramCacheKey = () => (mus.fiber ? "muscle-volume-v3-fiber" : "muscle-volume-v3");
   mat.needsUpdate = true;
 }
 
