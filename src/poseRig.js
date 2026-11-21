@@ -13,6 +13,7 @@ export const BONE_KEYS = ["root", "spine", "chest", "neck", "shL", "shR", "elL",
 export const POSE_KEYS = [...BONE_KEYS, "twL", "twR"];
 // 팔을 들면 어깨뼈·빗장뼈(어깨띠)도 함께 돈다(견갑상완 리듬 ≈ 2:1) → 팔 회전을 나눠 맡겨 어깨 주변이 덜 찢어지게
 const GIRDLE_SHARE = 0.3;
+const GIRDLE_UPROT = 24; // 팔을 끝까지 들었을 때 어깨띠 위쪽 돌림(도)
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -160,6 +161,7 @@ export function buildPoseRig(layers, options = {}) {
     const p = pos[k].clone();
     if (parent[k]) p.sub(pos[parent[k]]);
     b.position.copy(p);
+    if (/^sh/.test(k)) b.rotation.order = "ZXY"; // 어깨띠 위쪽 돌림을 먼저 되돌린 뒤 굽힘
     if (/^wr/.test(k)) b.rotation.order = "YXZ"; // 손목: 굽힌 뒤 비틀기 → 엎친 아래팔에서도 손이 옆으로 꺾이지 않게
     (parent[k] ? B[parent[k]] : F).add(b);
   }
@@ -319,6 +321,25 @@ export function buildPoseRig(layers, options = {}) {
       out[w.wr] = fw * k; out[w.el] = fw * (1 - k);
     }
   }
+  // 어깨: 격자 웨이트로는 삼각근 대부분이 어깨띠(cl)·가슴을 따라가, 팔을 들면 근복이 겨드랑이 옆에 혹처럼 남는다.
+  // 어깨관절을 지나는 근육은 관절 중심에서 본 방향(위팔뼈 쪽 = 아래·바깥)과 안쪽 거리로 위팔(sh)/어깨띠(cl)를 다시 나눈다.
+  const SHOULDER_RE = /^(deltoid|supraspinatus|infraspinatus|teres_minor|teres_major|subscapularis|coracobrachialis)$/;
+  const shKeys = {};
+  for (const S of ["L", "R"]) shKeys[S] = { sh: idx["sh" + S], cl: idx["cl" + S], c: J["sh" + S], hum: J["el" + S].clone().sub(J["sh" + S]).normalize() };
+  const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+  function shoulderSplit(v, out) {
+    for (const S of ["L", "R"]) {
+      const k = shKeys[S], s = S === "L" ? -1 : 1;
+      if (v.x * s <= 0) continue;
+      const tot = out[k.sh] + out[k.cl] + out[idx.chest] + out[idx.neck];
+      if (tot < 0.3) continue;
+      const d = _v2.copy(v).sub(k.c), len = d.length() || 1;
+      const ang = Math.acos(Math.min(1, Math.max(-1, d.dot(k.hum) / len))) * 180 / Math.PI; // 위팔뼈 축에서 벗어난 각
+      const lateral = smooth(Math.abs(k.c.x) - 0.07, Math.abs(k.c.x) - 0.025, v.x * s); // 관절보다 많이 안쪽이면 어깨뼈 몸통
+      const w = (1 - smooth(100, 160, ang)) * lateral; // 봉우리 꼭대기 근처만 어깨띠에 — 근복은 위팔을 따라감
+      out[k.sh] = tot * w; out[k.cl] = tot * (1 - w); out[idx.chest] = 0; out[idx.neck] = 0;
+    }
+  }
   const done = new Map(); // geometry → matrix(중복 공유 지오메트리 처리)
   const all = [];
   // 아직 스키닝 안 된 메시에 웨이트를 계산해 붙인다(나중에 로드된 피부도 여기로)
@@ -345,11 +366,13 @@ export function buildPoseRig(layers, options = {}) {
     const n = P.count;
     const si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
     const votes = new Uint32Array(BONE_KEYS.length);
+    const shoulderMus = SHOULDER_RE.test(m.userData.muscleId || "");
     for (let i = 0; i < n; i++) {
       _v.fromBufferAttribute(P, i).applyMatrix4(_m);
       if (field) sampleField(_v, acc); else pointWeights(_v, acc);
       allowMask(_v, acc); // 좌우·팔다리 구분은 흐린 뒤에도 지킨다
       wristSplit(_v, acc);
+      if (shoulderMus) shoulderSplit(_v, acc);
       // 가장 큰 네 뼈만 남겨 정규화
       const top = [-1, -1, -1, -1];
       for (let b = 0; b < NB; b++) {
@@ -481,7 +504,7 @@ export function buildPoseRig(layers, options = {}) {
       meanPosed(m, u.endB, u.uB.value);
       const L = u.uA.value.distanceTo(u.uB.value);
       let k = (Math.sqrt(u.L0 / Math.max(L, 1e-6)) - 1) * GAIN;
-      k = Math.min(0.5, Math.max(-0.35, k));
+      k = Math.min(0.3, Math.max(-0.35, k)); // 굵어지는 쪽은 +30%까지(삼각근이 달걀처럼 부풀지 않게)
       // 동작별 역할(해부학 기준)로 방향을 바로잡는다: 단순 회전 관절이라 관절 바로 옆 근육(대둔근·햄스트링 등)은
       // 길이 변화가 틀리게 잡힐 수 있음. 수축 → 굵어지는 쪽만, 신장 → 가늘어지는 쪽만.
       const role = roles && act > 0 ? roles.get(m.userData.muscleId) : null;
@@ -535,6 +558,11 @@ export function buildPoseRig(layers, options = {}) {
       const a = (raw["sh" + S] || 0) * D;
       B["cl" + S].rotation.x = a * GIRDLE_SHARE;
       B["sh" + S].rotation.x = a * (1 - GIRDLE_SHARE);
+      // 팔을 머리 위로 올릴수록 어깨뼈가 위쪽으로 돌며 봉우리(어깨 끝)가 올라간다(견갑골 상방회전).
+      // 옆면 회전만으로는 이게 없어 팔을 들면 삼각근이 어깨 아래에 처져 혹처럼 보였다.
+      const lift = Math.min(1, Math.max(0, (-a / D - 60) / 110)); // 굴곡 60°부터 170°까지 0→1
+      B["cl" + S].rotation.z = (S === "R" ? 1 : -1) * lift * GIRDLE_UPROT * D;
+      B["sh" + S].rotation.z = -B["cl" + S].rotation.z; // 팔 방향은 그대로(어깨 끝만 올라감) — sh는 ZXY 순서라 정확히 상쇄
     }
     B.root.position.copy(pos.root);
     F.updateMatrixWorld(true);
