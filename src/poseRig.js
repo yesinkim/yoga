@@ -14,6 +14,9 @@ export const POSE_KEYS = [...BONE_KEYS, "twL", "twR"];
 // 팔을 들면 어깨뼈·빗장뼈(어깨띠)도 함께 돈다(견갑상완 리듬 ≈ 2:1) → 팔 회전을 나눠 맡겨 어깨 주변이 덜 찢어지게
 const GIRDLE_SHARE = 0.3;
 const GIRDLE_UPROT = 24; // 팔을 끝까지 들었을 때 어깨띠 위쪽 돌림(도)
+const SCAP_PIVOT = false; // 어깨띠를 어깨뼈 가운데 축으로 돌릴지
+const _pq = new THREE.Vector3(), _pq2 = new THREE.Vector3();
+const HUM_EXT = 0;       // 팔을 끝까지 들었을 때 위팔 바깥돌림(도) — 아래팔·손은 되돌려 손 방향은 그대로
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -412,6 +415,44 @@ export function buildPoseRig(layers, options = {}) {
     return tabs;
   }
   const _o = new THREE.Vector3(), _mi = new THREE.Matrix4();
+  // ── 어깨뼈: 어깨띠 뼈(cl)에 통째로 ──
+  // 격자 웨이트로는 cl이 어깨 꼭대기만 잡고 어깨뼈 몸통(아래각·안쪽모서리)은 가슴(chest)에 남아, 팔을 들어
+  // 어깨띠를 돌려도 큰원근·회전근개의 어깨뼈 쪽 끝이 제자리라 2배 넘게 늘어났다. 어깨뼈 뼈 메시에서 점을 뽑아
+  // 그 표면 가까운 어깨뼈 근육(회전근개·큰원근·마름근·앞톱니근 등)을 cl로 옮긴다.
+  const SCAP_R = { supraspinatus: 0.03, infraspinatus: 0.03, subscapularis: 0.03, teres_minor: 0.03, teres_major: 0.03,
+  }; // 마름근·앞톱니근·등세모근·어깨올림근은 일부만 옮기면 경계가 찢어져 제외(측정으로 확인)
+  const SC = 0.02, scapHash = new Map(), scapBox = new THREE.Box3();
+  for (const m of layers.skeleton.meshes) {
+    if (!/^Scapula/.test(m.name || "")) continue;
+    _m.multiplyMatrices(invF, m.matrixWorld);
+    const P = m.geometry.attributes.position, step = Math.max(1, Math.floor(P.count / 4000));
+    for (let i = 0; i < P.count; i += step) {
+      const v = new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(_m);
+      scapBox.expandByPoint(v);
+      const k = `${Math.floor(v.x / SC)},${Math.floor(v.y / SC)},${Math.floor(v.z / SC)}`;
+      if (!scapHash.has(k)) scapHash.set(k, []);
+      scapHash.get(k).push(v);
+    }
+  }
+  const scapC = { L: new THREE.Vector3(), R: new THREE.Vector3() }, scapN = { L: 0, R: 0 };
+  for (const L of scapHash.values()) for (const q of L) { const S = q.x < 0 ? "L" : "R"; scapC[S].add(q); scapN[S]++; }
+  for (const S of ["L", "R"]) if (scapN[S]) scapC[S].multiplyScalar(1 / scapN[S]); else scapC[S].copy(pos["cl" + S]);
+  function scapDist(v) {
+    if (scapBox.distanceToPoint(v) > 0.04) return Infinity;
+    const cx = Math.floor(v.x / SC), cy = Math.floor(v.y / SC), cz = Math.floor(v.z / SC);
+    let best = Infinity;
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+      const L = scapHash.get(`${cx + dx},${cy + dy},${cz + dz}`); if (!L) continue;
+      for (const q of L) { const d = q.distanceToSquared(v); if (d < best) best = d; }
+    }
+    return Math.sqrt(best);
+  }
+  function scapPull(v, out, w) { // 같은 쪽 팔 몫은 그대로, 나머지(몸통·어깨띠)의 w만큼을 cl로
+    const s = v.x < 0 ? -1 : 1, cl = idx[s < 0 ? "clL" : "clR"];
+    let T = 0;
+    for (let b = 0; b < NB; b++) if (!(kind[b] === 1 && side[b] === s)) { T += out[b] * w; out[b] *= 1 - w; }
+    out[cl] += T;
+  }
   const done = new Map(); // geometry → matrix(중복 공유 지오메트리 처리)
   const all = [];
   // 아직 스키닝 안 된 메시에 웨이트를 계산해 붙인다(나중에 로드된 피부도 여기로)
@@ -440,6 +481,8 @@ export function buildPoseRig(layers, options = {}) {
     const si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
     const votes = new Uint32Array(BONE_KEYS.length);
     const shoulderMus = SHOULDER_RE.test(m.userData.muscleId || "");
+    const scapBone = /^Scapula/.test(m.name || "") && layers.skeleton.meshes.includes(m);
+    const scapR = SCAP_R[m.userData.muscleId || ""] || 0;
     const trunkOnly = /^(rectus_abdominis|external_oblique|internal_oblique|transversus|pyramidalis)$/.test(m.userData.muscleId || "");
     const fibId = FIBER[m.userData.muscleId || ""] ? m.userData.muscleId : null;
     let fO, fI, fB;
@@ -469,6 +512,8 @@ export function buildPoseRig(layers, options = {}) {
         let sum = 0; for (let b = 0; b < NB; b++) { if (kind[b] === 2) acc[b] = 0; sum += acc[b]; }
         if (sum > 0) for (let b = 0; b < NB; b++) acc[b] /= sum; else acc[idx.root] = 1;
       }
+      if (scapBone) scapPull(_v, acc, 1);
+      else if (scapR && scapHash.size) { const d = scapDist(_v); if (d < scapR) scapPull(_v, acc, 1 - smooth(0.006, scapR, d)); }
       // 가장 큰 네 뼈만 남겨 정규화
       const top = [-1, -1, -1, -1];
       for (let b = 0; b < NB; b++) {
@@ -652,6 +697,7 @@ export function buildPoseRig(layers, options = {}) {
   const STRAP_SKIP = new Set([...Object.keys(FIBER), "trapezius", "deltoid", "coracobrachialis"]);
   // 회전근개(어깨뼈 → 위팔뼈 머리)도 짧은 띠라 팔을 들면 관절 바로 옆에서만 늘어나 찢어진다 → 어깨띠↔위팔 사이로 고르게
   const CUFF = new Set(["supraspinatus", "infraspinatus", "teres_minor", "subscapularis"]);
+  const SLING = new Set(["rhomboid_major", "rhomboid_minor", "levator_scapulae", "omohyoid"]);
   const straps = [];
   for (const g of musGroups.values()) {
     const lead = musLead.get(g[0]), id = lead.userData.muscleId || "";
@@ -675,7 +721,9 @@ export function buildPoseRig(layers, options = {}) {
     let bA = 0, bB = 0;
     for (let b = 0; b < NB; b++) { WA[b] /= nA; WB[b] /= nB; if (WA[b] > WA[bA]) bA = b; if (WB[b] > WB[bB]) bB = b; }
     // 목(머리) 뼈와 그 아래 뼈 사이만 — 다리·팔 근육은 근복이 한 뼈 위에 있고 힘줄만 관절을 지나 그대로 둔다
-    if (bA === bB || WA[bA] < 0.6 || WB[bB] < 0.6 || !adjacent(bA, bB) || (bA !== idx.neck && bB !== idx.neck && !CUFF.has(id))) continue;
+    // 어깨뼈를 몸통·목에 매다는 근육(마름근·어깨올림근·어깨목뿔근)은 어깨뼈가 돌면 늘어나는 띠 — 이웃 뼈가 아니어도 섞는다
+    const sling = SLING.has(id) && (bA === idx.clL || bA === idx.clR || bB === idx.clL || bB === idx.clR);
+    if (bA === bB || WA[bA] < 0.5 || WB[bB] < 0.5 || (!sling && (WA[bA] < 0.6 || WB[bB] < 0.6 || !adjacent(bA, bB) || (bA !== idx.neck && bB !== idx.neck && !CUFF.has(id))))) continue;
     straps.push(id);
     g.forEach((m, gi) => {
       const t = ts[gi], n = t.length, si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
@@ -754,15 +802,28 @@ export function buildPoseRig(layers, options = {}) {
       B["wr" + S].rotation.y = tw * 0.5;
       B["wr" + S].rotation.x += handTilt[S] * (tw / Math.PI); // 엎친 만큼 손 말림을 보정(손바닥 평평하게)
     }
+    const T = (import.meta.env?.DEV && typeof window !== "undefined" && window.__rigTune) || {};
+    const share = T.share ?? GIRDLE_SHARE, uprot = T.uprot ?? GIRDLE_UPROT, ext = T.ext ?? HUM_EXT;
     for (const S of ["L", "R"]) { // 팔 회전을 어깨띠와 어깨 관절에 나눠 준다
       const a = (raw["sh" + S] || 0) * D;
-      B["cl" + S].rotation.x = a * GIRDLE_SHARE;
-      B["sh" + S].rotation.x = a * (1 - GIRDLE_SHARE);
+      B["cl" + S].rotation.x = a * share;
+      B["sh" + S].rotation.x = a * (1 - share);
       // 팔을 머리 위로 올릴수록 어깨뼈가 위쪽으로 돌며 봉우리(어깨 끝)가 올라간다(견갑골 상방회전).
       // 옆면 회전만으로는 이게 없어 팔을 들면 삼각근이 어깨 아래에 처져 혹처럼 보였다.
       const lift = Math.min(1, Math.max(0, (-a / D - 60) / 110)); // 굴곡 60°부터 170°까지 0→1
-      B["cl" + S].rotation.z = (S === "R" ? 1 : -1) * lift * GIRDLE_UPROT * D;
+      B["cl" + S].rotation.z = (S === "R" ? 1 : -1) * lift * uprot * D;
       B["sh" + S].rotation.z = -B["cl" + S].rotation.z; // 팔 방향은 그대로(어깨 끝만 올라감) — sh는 ZXY 순서라 정확히 상쇄
+      // 어깨뼈는 제 몸 가운데를 축으로 돈다(위쪽 돌림이면 봉우리는 위로, 아래각은 바깥으로) → 뼈 원점을 그만큼 옮긴다
+      if (T.piv ?? SCAP_PIVOT) {
+        const q = _pq.copy(scapC[S]).sub(pos.chest); // chest 뼈 좌표(쉬는 자세 회전 없음)
+        _pq2.copy(pos["cl" + S]).sub(pos.chest).sub(q).applyEuler(B["cl" + S].rotation).add(q);
+        B["cl" + S].position.copy(_pq2);
+      } else B["cl" + S].position.copy(pos["cl" + S]).sub(pos.chest);
+      // 위팔 바깥돌림(팔을 들수록) — 위팔뼈 긴축(쉬는 자세의 Y) 둘레. 팔꿈치·손목에서 반씩 되돌려 손바닥 방향은 유지
+      const er = (S === "R" ? 1 : -1) * lift * ext * D;
+      B["sh" + S].rotation.y = er;
+      B["el" + S].rotation.y -= er * 0.5;
+      B["wr" + S].rotation.y -= er * 0.5;
     }
     B.root.position.copy(pos.root);
     F.updateMatrixWorld(true);
