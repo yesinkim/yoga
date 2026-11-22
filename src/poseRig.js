@@ -383,15 +383,30 @@ export function buildPoseRig(layers, options = {}) {
         if (r > tb.rmax[b]) tb.rmax[b] = r;
       }
     }
-    for (const tb of tabs.values()) { // 이웃 칸 최대값으로 넓혀 빈 칸·들쭉날쭉한 끝을 메운다
+    for (const tb of tabs.values()) {
+      // 근육이 없는 빈 칸을 이웃 값으로 채운다(근육이 있는 칸은 그대로) — 가장자리에서 보간이 0 쪽으로 끌려
+      // 기시점이 정점 자신으로 튀면(=몸통에 남음) 바로 옆 정점과 찢어진다
+      for (let pass = 0; pass < 6; pass++) {
+        const src = tb.rmax.slice();
+        for (let a = 0; a < FB; a++) for (let c = 0; c < FB; c++) {
+          if (src[a * FB + c] > 0) continue;
+          let sum = 0, cnt = 0;
+          for (let da = -1; da <= 1; da++) for (let dc = -1; dc <= 1; dc++) {
+            const aa = (a + da + FB) % FB, cc = c + dc; if (cc < 0 || cc >= FB) continue;
+            const v = src[aa * FB + cc]; if (v > 0) { sum += v; cnt++; }
+          }
+          if (cnt) tb.rmax[a * FB + c] = sum / cnt;
+        }
+      }
+      // 살짝 흐려 들쭉날쭉한 끝을 고른다
       const src = tb.rmax.slice();
       for (let a = 0; a < FB; a++) for (let c = 0; c < FB; c++) {
-        let mx = 0;
+        let sum = 0, cnt = 0;
         for (let da = -1; da <= 1; da++) for (let dc = -1; dc <= 1; dc++) {
           const aa = (a + da + FB) % FB, cc = c + dc; if (cc < 0 || cc >= FB) continue;
-          mx = Math.max(mx, src[aa * FB + cc]);
+          sum += src[aa * FB + cc]; cnt++;
         }
-        tb.rmax[a * FB + c] = mx;
+        tb.rmax[a * FB + c] = Math.max(src[a * FB + c], sum / cnt);
       }
     }
     return tabs;
