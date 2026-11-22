@@ -440,6 +440,7 @@ export function buildPoseRig(layers, options = {}) {
     const si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
     const votes = new Uint32Array(BONE_KEYS.length);
     const shoulderMus = SHOULDER_RE.test(m.userData.muscleId || "");
+    const trunkOnly = /^(rectus_abdominis|external_oblique|internal_oblique|transversus|pyramidalis)$/.test(m.userData.muscleId || "");
     const fibId = FIBER[m.userData.muscleId || ""] ? m.userData.muscleId : null;
     let fO, fI, fB;
     if (fibId) { fO = new Float32Array(n * 3); fI = new Float32Array(n * 3); fB = new Float32Array(n); _mi.copy(_m).invert(); }
@@ -464,6 +465,10 @@ export function buildPoseRig(layers, options = {}) {
       }
       wristSplit(_v, acc);
       if (shoulderMus && !fibId) shoulderSplit(_v, acc);
+      if (trunkOnly) { // 배 근육은 골반·갈비뼈에만 붙는다 — 사타구니 쪽 끝이 허벅지를 따라가면 앞으로 숙일 때 손가락처럼 찢어져 나온다
+        let sum = 0; for (let b = 0; b < NB; b++) { if (kind[b] === 2) acc[b] = 0; sum += acc[b]; }
+        if (sum > 0) for (let b = 0; b < NB; b++) acc[b] /= sum; else acc[idx.root] = 1;
+      }
       // 가장 큰 네 뼈만 남겨 정규화
       const top = [-1, -1, -1, -1];
       for (let b = 0; b < NB; b++) {
@@ -482,6 +487,14 @@ export function buildPoseRig(layers, options = {}) {
         sw[i * 4 + t] = q; used += q;
       }
       votes[top[0]]++;
+    }
+    if (shoulderMus && !fibId) { // 어깨관절 중심(물체 좌표)과 위팔 뼈 번호 — 셰이더가 관절에서의 거리를 지켜 준다
+      const S = (m.geometry.boundingBox || (g.computeBoundingBox(), g.boundingBox)).getCenter(_v).applyMatrix4(_m).x < 0 ? "L" : "R";
+      _mi.copy(_m).invert(); _v2.copy(J["sh" + S]).applyMatrix4(_mi);
+      const jn = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) { jn[i * 4] = _v2.x; jn[i * 4 + 1] = _v2.y; jn[i * 4 + 2] = _v2.z; jn[i * 4 + 3] = idx["sh" + S]; }
+      g.setAttribute("aJnt", new THREE.BufferAttribute(jn, 4));
+      m.userData.joint = true;
     }
     if (fibId) {
       g.setAttribute("aFibO", new THREE.BufferAttribute(fO, 3));
@@ -543,7 +556,19 @@ export function buildPoseRig(layers, options = {}) {
     out.copy(O1).addScaledVector(_f1, a).add(_fn.lerp(nr, a));
     return out; // 물체 좌표(getVertexPosition과 같음)
   }
-  const posedVertex = (m, i, out) => (m.userData.fiber ? fiberVertex(m, i, out) : m.getVertexPosition(i, out));
+  const _jc = new THREE.Vector3(), _jr = new THREE.Vector3();
+  function jointVertex(m, i, out) {
+    m.getVertexPosition(i, out);
+    const a = m.geometry.attributes.aJnt;
+    _jc.set(a.getX(i), a.getY(i), a.getZ(i));
+    const r0 = _jr.fromBufferAttribute(m.geometry.attributes.position, i).distanceTo(_jc);
+    boneMat(m, a.getW(i), _bm).premultiply(m.bindMatrixInverse).multiply(m.bindMatrix);
+    _jc.applyMatrix4(_bm);
+    const d = out.sub(_jc), L = d.length();
+    if (L > 1e-5) d.multiplyScalar(r0 / L);
+    return out.add(_jc);
+  }
+  const posedVertex = (m, i, out) => (m.userData.fiber ? fiberVertex(m, i, out) : m.userData.joint ? jointVertex(m, i, out) : m.getVertexPosition(i, out));
   const meanPosed = (m, ids, out) => { out.set(0, 0, 0); for (const i of ids) out.add(posedVertex(m, i, _pp)); return out.multiplyScalar(1 / ids.length); };
   function setupMuscleDeform(list) {
     const c = new THREE.Vector3(), e = new THREE.Vector3(), t3 = new THREE.Vector3();
@@ -595,7 +620,7 @@ export function buildPoseRig(layers, options = {}) {
       const A = meanRest(P, endA), Bv = meanRest(P, endB);
       // 넓적한(단면이 납작한) 근육은 직선 축 기준 확대가 근육을 통째로 밀어내거나 꺼뜨리므로 표면 법선 방향으로
       const sheet = thin < SHEET_RATIO * wide;
-      const mus = { fiber: !!m.userData.fiber, endA, endB, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 },
+      const mus = { fiber: !!m.userData.fiber, joint: !!m.userData.joint, endA, endB, L0: A.distanceTo(Bv), uA: { value: A.clone() }, uB: { value: Bv.clone() }, uS: { value: 0 },
         uSheet: { value: sheet ? 1 : 0 }, uThick: { value: Math.min(thin * 1.5, shellHalfThickness(m.geometry), 0.008) } };
       m.userData.mus = mus;
       patchMaterial(m.material, mus);
@@ -624,7 +649,9 @@ export function buildPoseRig(layers, options = {}) {
   // (목 근육만 해당) 격자 웨이트는 관절 근처에서만 바뀌어, 목을 젖히면 복장목뿔근·어깨목뿔근 등이 한 지점에서 2배 넘게 늘어나 찢어졌다.
   // 실제 근육은 전체 길이에 걸쳐 고르게 늘어나므로 주축 비율 t로 (1−t)·W(기시 끝) + t·W(정지 끝).
   const adjacent = (a, b) => parent[BONE_KEYS[a]] === BONE_KEYS[b] || parent[BONE_KEYS[b]] === BONE_KEYS[a];
-  const STRAP_SKIP = new Set([...Object.keys(FIBER), "trapezius", "deltoid", "supraspinatus", "infraspinatus", "teres_minor", "subscapularis", "coracobrachialis"]);
+  const STRAP_SKIP = new Set([...Object.keys(FIBER), "trapezius", "deltoid", "coracobrachialis"]);
+  // 회전근개(어깨뼈 → 위팔뼈 머리)도 짧은 띠라 팔을 들면 관절 바로 옆에서만 늘어나 찢어진다 → 어깨띠↔위팔 사이로 고르게
+  const CUFF = new Set(["supraspinatus", "infraspinatus", "teres_minor", "subscapularis"]);
   const straps = [];
   for (const g of musGroups.values()) {
     const lead = musLead.get(g[0]), id = lead.userData.muscleId || "";
@@ -648,7 +675,7 @@ export function buildPoseRig(layers, options = {}) {
     let bA = 0, bB = 0;
     for (let b = 0; b < NB; b++) { WA[b] /= nA; WB[b] /= nB; if (WA[b] > WA[bA]) bA = b; if (WB[b] > WB[bB]) bB = b; }
     // 목(머리) 뼈와 그 아래 뼈 사이만 — 다리·팔 근육은 근복이 한 뼈 위에 있고 힘줄만 관절을 지나 그대로 둔다
-    if (bA === bB || WA[bA] < 0.6 || WB[bB] < 0.6 || !adjacent(bA, bB) || (bA !== idx.neck && bB !== idx.neck)) continue;
+    if (bA === bB || WA[bA] < 0.6 || WB[bB] < 0.6 || !adjacent(bA, bB) || (bA !== idx.neck && bB !== idx.neck && !CUFF.has(id))) continue;
     straps.push(id);
     g.forEach((m, gi) => {
       const t = ts[gi], n = t.length, si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
@@ -803,14 +830,25 @@ const FIBER_GLSL_POS = `
         transformed = fibO1 + fibA * fibF1 + mix(fibNb, musQuatRot(fibQ, fibNb), fibA);
       }`;
 
+// 어깨를 감싸는 근육(삼각근 등): 윗부분은 어깨띠, 아랫부분은 위팔을 따라가는데, 팔을 머리 위로 들면(≈120° 차이)
+// 두 뼈 위치를 선형으로 섞은 가운데가 관절 쪽으로 오그라들어 잘록해지고 위아래가 혹처럼 남았다.
+// 위팔뼈 머리를 덮는 돔이므로 관절 중심에서의 거리를 원래대로 되돌린다(방향만 섞기 = 구면 섞기).
+const JOINT_GLSL_POS = `
+      {
+        vec3 jc = (bindMatrixInverse * getBoneMatrix(aJnt.w) * bindMatrix * vec4(aJnt.xyz, 1.0)).xyz;
+        vec3 jd = transformed - jc;
+        float jl = length(jd);
+        if (jl > 1e-5) transformed = jc + jd * (length(position - aJnt.xyz) / jl);
+      }`;
+
 function patchMaterial(mat, mus) {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uMusA = mus.uA; shader.uniforms.uMusB = mus.uB; shader.uniforms.uMusS = mus.uS;
     shader.uniforms.uMusSheet = mus.uSheet; shader.uniforms.uMusThick = mus.uThick;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;\nuniform float uMusSheet;\nuniform float uMusThick;" + (mus.fiber ? FIBER_GLSL_PARS : ""))
+      .replace("#include <common>", "#include <common>\nattribute float aMusT;\nuniform vec3 uMusA;\nuniform vec3 uMusB;\nuniform float uMusS;\nuniform float uMusSheet;\nuniform float uMusThick;" + (mus.fiber ? FIBER_GLSL_PARS : "") + (mus.joint ? "\nattribute vec4 aJnt;" : ""))
       .replace("#include <skinnormal_vertex>", "#include <skinnormal_vertex>" + (mus.fiber ? FIBER_GLSL_NORMAL : ""))
-      .replace("#include <skinning_vertex>", `#include <skinning_vertex>${mus.fiber ? FIBER_GLSL_POS : ""}
+      .replace("#include <skinning_vertex>", `#include <skinning_vertex>${mus.fiber ? FIBER_GLSL_POS : ""}${mus.joint ? JOINT_GLSL_POS : ""}
       {
         float musBelly = sin(3.14159265 * clamp(aMusT, 0.0, 1.0));
         if (uMusSheet > 0.5) {
@@ -824,7 +862,7 @@ function patchMaterial(mat, mus) {
         }
       }`);
   };
-  mat.customProgramCacheKey = () => (mus.fiber ? "muscle-volume-v3-fiber" : "muscle-volume-v3");
+  mat.customProgramCacheKey = () => (mus.fiber ? "muscle-volume-v3-fiber" : mus.joint ? "muscle-volume-v3-joint" : "muscle-volume-v3");
   mat.needsUpdate = true;
 }
 
