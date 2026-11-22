@@ -620,6 +620,55 @@ export function buildPoseRig(layers, options = {}) {
     for (const m of g) if (m.geometry.attributes.position.count > lead.geometry.attributes.position.count) lead = m;
     for (const m of g) musLead.set(m, lead);
   }
+  // ── 띠근육: 이웃한 두 뼈 사이를 건너는 길쭉한 근육은 양 끝 웨이트를 길이 방향으로 고르게 섞는다 ──
+  // (목 근육만 해당) 격자 웨이트는 관절 근처에서만 바뀌어, 목을 젖히면 복장목뿔근·어깨목뿔근 등이 한 지점에서 2배 넘게 늘어나 찢어졌다.
+  // 실제 근육은 전체 길이에 걸쳐 고르게 늘어나므로 주축 비율 t로 (1−t)·W(기시 끝) + t·W(정지 끝).
+  const adjacent = (a, b) => parent[BONE_KEYS[a]] === BONE_KEYS[b] || parent[BONE_KEYS[b]] === BONE_KEYS[a];
+  const STRAP_SKIP = new Set([...Object.keys(FIBER), "trapezius", "deltoid", "supraspinatus", "infraspinatus", "teres_minor", "subscapularis", "coracobrachialis"]);
+  const straps = [];
+  for (const g of musGroups.values()) {
+    const lead = musLead.get(g[0]), id = lead.userData.muscleId || "";
+    if (STRAP_SKIP.has(id) || lead.userData.mus.uSheet.value > 0.5) continue;
+    const A = lead.userData.mus.uA.value.clone().applyMatrix4(lead.matrixWorld), Bw = lead.userData.mus.uB.value.clone().applyMatrix4(lead.matrixWorld);
+    const ab = Bw.clone().sub(A), L2 = ab.lengthSq(); if (L2 < 1e-6) continue;
+    const WA = new Float32Array(NB), WB = new Float32Array(NB); let nA = 0, nB = 0;
+    const ts = [];
+    for (const m of g) {
+      const P = m.geometry.attributes.position, si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight;
+      const t = new Float32Array(P.count);
+      for (let i = 0; i < P.count; i++) {
+        t[i] = _v.fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld).sub(A).dot(ab) / L2;
+        const W = t[i] < 0.12 ? WA : t[i] > 0.88 ? WB : null; if (!W) continue;
+        for (let k = 0; k < 4; k++) W[si.getComponent(i, k)] += sw.getComponent(i, k);
+        if (W === WA) nA++; else nB++;
+      }
+      ts.push(t);
+    }
+    if (!nA || !nB) continue;
+    let bA = 0, bB = 0;
+    for (let b = 0; b < NB; b++) { WA[b] /= nA; WB[b] /= nB; if (WA[b] > WA[bA]) bA = b; if (WB[b] > WB[bB]) bB = b; }
+    // 목(머리) 뼈와 그 아래 뼈 사이만 — 다리·팔 근육은 근복이 한 뼈 위에 있고 힘줄만 관절을 지나 그대로 둔다
+    if (bA === bB || WA[bA] < 0.6 || WB[bB] < 0.6 || !adjacent(bA, bB) || (bA !== idx.neck && bB !== idx.neck)) continue;
+    straps.push(id);
+    g.forEach((m, gi) => {
+      const t = ts[gi], n = t.length, si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        let u = Math.min(1, Math.max(0, (t[i] - 0.1) / 0.8)); u = u * u * (3 - 2 * u);
+        for (let b = 0; b < NB; b++) acc[b] = WA[b] * (1 - u) + WB[b] * u;
+        const top = [-1, -1, -1, -1];
+        for (let b = 0; b < NB; b++) {
+          if (acc[b] <= 0) continue;
+          for (let k = 0; k < 4; k++) if (top[k] < 0 || acc[b] > acc[top[k]]) { for (let q = 3; q > k; q--) top[q] = top[q - 1]; top[k] = b; break; }
+        }
+        let sum = 0; for (const b of top) if (b >= 0) sum += acc[b];
+        let used = 0;
+        for (let k = 0; k < 4; k++) { const b = top[k]; si[i * 4 + k] = b < 0 ? 0 : b; const q = k === 3 ? Math.max(0, 255 - used) : b < 0 ? 0 : Math.round((255 * acc[b]) / sum); sw[i * 4 + k] = q; used += q; }
+      }
+      m.geometry.setAttribute("skinIndex", new THREE.Uint8BufferAttribute(si, 4));
+      m.geometry.setAttribute("skinWeight", new THREE.Uint8BufferAttribute(sw, 4, true));
+    });
+  }
+  if (import.meta.env?.DEV) window.__straps = straps;
   // 매 프레임(자세 보간 중) 호출: roles = Map(근육 id → "c"|"s"), act 0~1 = 수축 힘 표시 세기
   function updateMuscles(roles, act = 0) {
     for (const m of musc) {
@@ -703,7 +752,7 @@ export function buildPoseRig(layers, options = {}) {
     for (const o of probes) bb.expandByPoint(o.getWorldPosition(wp));
     return bb.getCenter(center);
   }
-  return { apply, worldCenter, skinNew, updateMuscles, skeleton, joints: J, restPos: pos, parent, grid: { lo: lo.toArray(), H, NX, NY, NZ, NB } };
+  return { apply, worldCenter, skinNew, updateMuscles, posedVertex, skeleton, joints: J, restPos: pos, parent, grid: { lo: lo.toArray(), H, NX, NY, NZ, NB } };
 }
 
 // 기존 Mesh를 그대로(참조 유지) SkinnedMesh로 바꾼다 — 강조/벗기기/클릭 로직이 같은 객체를 계속 쓰게
